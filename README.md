@@ -30,3 +30,8 @@ Converts images to ASCII, with a twist; it traces edges in the image and attempt
 It can also crop, output ANSI colour, adjust contrast/colour balance/brightness, invert, and other nice stuff. `cli.main` will install itself as a `image2ascii` command, check it out for more info. Play around with various combinations of `--invert`, `--invert-colors`, and `--swap-bw` until the results are to your liking.
 
 This project is totally in alpha and makes no guarantees for anything whatsoever.
+
+Uses:
+* [Pillow](https://python-pillow.org/)
+* [Matplotlib](https://matplotlib.org/)
+* [Colorama](https://github.com/tartley/colorama)

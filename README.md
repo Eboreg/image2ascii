@@ -52,8 +52,7 @@ This is the simplest possible way to render HTML:
 from image2ascii.core import Image2ASCII
 from image2ascii.output import HTMLFormatter
 
-i2a = Image2ASCII("image.png")
-print(i2a.render(formatter=HTMLFormatter()))
+print(Image2ASCII("image.png").prepare().render(formatter=HTMLFormatter()))
 ```
 
 But you are a highly cultured individual who shouldn't settle for that baseline. Check out the `Image2ASCII` class for more options, and remember to always run `prepare()` before the final `render()`.

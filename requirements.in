@@ -1,0 +1,9 @@
+autopep8
+colorama
+flake8
+ipdb
+ipython
+matplotlib
+mypy
+Pillow
+types-Pillow

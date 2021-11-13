@@ -7,6 +7,7 @@ import colorama
 from colorama import Fore
 
 from image2ascii import DEFAULT_ASCII_RATIO, DEFAULT_ASCII_WIDTH, DEFAULT_MIN_LIKENESS, DEFAULT_QUALITY, __version__
+from image2ascii.color import ColorConverterInvertBW
 from image2ascii.core import Image2ASCII
 
 
@@ -115,30 +116,33 @@ def main():
         ascii_width=args.width,
         quality=args.quality,
         ascii_ratio=args.ratio,
-        min_likeness=args.min_likeness,
-        contrast=args.contrast,
-        brightness=args.brightness,
-        crop=args.crop,
         invert=args.invert,
-        color=args.color,
-        invert_colors=args.invert_colors,
-        color_balance=args.color_balance,
-        swap_bw=args.swap_bw,
     )
 
-    ascii = i2a.convert()
+    i2a.enhance(args.contrast, args.brightness, args.color_balance)
+
+    if args.invert_colors:
+        i2a.invert_colors()
+
+    if args.crop:
+        i2a.crop()
+
+    if args.swap_bw:
+        i2a.set_color_converter(ColorConverterInvertBW())
+
+    i2a.prepare()
+
+    output = i2a.render(color=args.color, min_likeness=args.min_likeness)
 
     elapsed_time = time.monotonic() - start_time
 
-    print(ascii)
+    print(output)
 
     if args.debug:
-        print(f" *** min_likeness: {i2a.min_likeness}")
         print(f" *** source_width: {i2a.source_width}")
         print(f" *** source_height: {i2a.source_height}")
         print(f" *** section_width: {i2a.section_width}")
         print(f" *** section_height: {i2a.section_height}")
-        print(f" *** color_balance: {i2a.color_balance}")
         print(f" *** Conversion time: {elapsed_time} seconds")
 
 

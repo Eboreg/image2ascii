@@ -1,5 +1,5 @@
 from collections import UserList, namedtuple
-from typing import Generic, List, Optional, SupportsFloat, Tuple, TypeVar
+from typing import Generic, Iterable, List, Optional, SupportsFloat, Tuple, TypeVar
 
 from matplotlib.path import Path
 
@@ -85,7 +85,7 @@ class Shape:
     def __init__(
         self,
         char: str,
-        *points: Tuple[SupportsFloat, SupportsFloat],
+        points: Iterable[Tuple[SupportsFloat, SupportsFloat]],
         width: Optional[int] = None,
         height: Optional[int] = None,
     ):

@@ -3,22 +3,22 @@ from collections import namedtuple
 from statistics import mean
 from typing import List, Optional
 
-import colorama
+from colorama import Fore, ansi
 
 from image2ascii import EMPTY_CHARACTER
 
-ANSI_COLOR_PATTERN = re.escape(colorama.ansi.CSI) + r"\d+m"
+ANSI_COLOR_PATTERN = re.escape(ansi.CSI) + r"\d+m"
 EMPTY_ROW_PATTERN = re.compile(rf"^{EMPTY_CHARACTER}*({ANSI_COLOR_PATTERN})?{EMPTY_CHARACTER}*$")
 
-Color = namedtuple("Color", ["red", "green", "blue"])
+RGB = namedtuple("RGB", ["red", "green", "blue"])
 
 
-class ANSIColor:
+class Color:
     name: Optional[str]
 
-    def __init__(self, code: str, color: Color):
-        self.code = code
-        self.color = color
+    def __init__(self, rgb: RGB, ansi: str):
+        self.ansi = ansi
+        self.rgb = rgb
         self.name = None
 
     def __repr__(self):
@@ -26,51 +26,55 @@ class ANSIColor:
             return self.name
         return super().__repr__()
 
-    def compare(self, other: Color) -> float:
+    @property
+    def hex(self) -> str:
+        return "#{:02x}{:02x}{:02x}".format(self.rgb.red, self.rgb.green, self.rgb.blue)
+
+    def compare(self, other: RGB) -> float:
         """1.0 = perfect match, 0.0 = complete opposite"""
-        diffs = [abs(other[idx] - self.color[idx]) for idx in range(3)]
+        diffs = [abs(other[idx] - self.rgb[idx]) for idx in range(3)]
         return 1 - mean(diffs) / 0xff
 
     def set_name(self, name: str):
         self.name = name
 
 
-class ANSIColorConverter:
-    BLACK = ANSIColor(colorama.Fore.BLACK, Color(0x00, 0x00, 0x00))
-    BLUE = ANSIColor(colorama.Fore.BLUE, Color(0x00, 0x00, 0x80))
-    GREEN = ANSIColor(colorama.Fore.GREEN, Color(0x00, 0x80, 0x00))
-    CYAN = ANSIColor(colorama.Fore.CYAN, Color(0x00, 0x80, 0x80))
-    RED = ANSIColor(colorama.Fore.RED, Color(0x80, 0x00, 0x00))
-    MAGENTA = ANSIColor(colorama.Fore.MAGENTA, Color(0x80, 0x00, 0x80))
-    YELLOW = ANSIColor(colorama.Fore.YELLOW, Color(0x80, 0x80, 0x00))
-    WHITE = ANSIColor(colorama.Fore.WHITE, Color(0xc0, 0xc0, 0xc0))
+class ColorConverter:
+    BLACK = Color(RGB(0x00, 0x00, 0x00), Fore.BLACK)
+    BLUE = Color(RGB(0x00, 0x00, 0x80), Fore.BLUE)
+    GREEN = Color(RGB(0x00, 0x80, 0x00), Fore.GREEN)
+    CYAN = Color(RGB(0x00, 0x80, 0x80), Fore.CYAN)
+    RED = Color(RGB(0x80, 0x00, 0x00), Fore.RED)
+    MAGENTA = Color(RGB(0x80, 0x00, 0x80), Fore.MAGENTA)
+    YELLOW = Color(RGB(0x80, 0x80, 0x00), Fore.YELLOW)
+    WHITE = Color(RGB(0xc0, 0xc0, 0xc0), Fore.WHITE)
 
-    LIGHTBLACK = ANSIColor(colorama.Fore.LIGHTBLACK_EX, Color(0x40, 0x40, 0x40))
-    LIGHTBLUE = ANSIColor(colorama.Fore.LIGHTBLUE_EX, Color(0x00, 0x00, 0xff))
-    LIGHTGREEN = ANSIColor(colorama.Fore.LIGHTGREEN_EX, Color(0x00, 0xff, 0x00))
-    LIGHTCYAN = ANSIColor(colorama.Fore.LIGHTCYAN_EX, Color(0x00, 0xff, 0xff))
-    LIGHTRED = ANSIColor(colorama.Fore.LIGHTRED_EX, Color(0xff, 0x00, 0x00))
-    LIGHTMAGENTA = ANSIColor(colorama.Fore.LIGHTMAGENTA_EX, Color(0xff, 0x00, 0xff))
-    LIGHTYELLOW = ANSIColor(colorama.Fore.LIGHTYELLOW_EX, Color(0xff, 0xff, 0x00))
-    LIGHTWHITE = ANSIColor(colorama.Fore.LIGHTWHITE_EX, Color(0xff, 0xff, 0xff))
+    LIGHTBLACK = Color(RGB(0x40, 0x40, 0x40), Fore.LIGHTBLACK_EX)
+    LIGHTBLUE = Color(RGB(0x00, 0x00, 0xff), Fore.LIGHTBLUE_EX)
+    LIGHTGREEN = Color(RGB(0x00, 0xff, 0x00), Fore.LIGHTGREEN_EX)
+    LIGHTCYAN = Color(RGB(0x00, 0xff, 0xff), Fore.LIGHTCYAN_EX)
+    LIGHTRED = Color(RGB(0xff, 0x00, 0x00), Fore.LIGHTRED_EX)
+    LIGHTMAGENTA = Color(RGB(0xff, 0x00, 0xff), Fore.LIGHTMAGENTA_EX)
+    LIGHTYELLOW = Color(RGB(0xff, 0xff, 0x00), Fore.LIGHTYELLOW_EX)
+    LIGHTWHITE = Color(RGB(0xff, 0xff, 0xff), Fore.LIGHTWHITE_EX)
 
     def __init__(self):
-        self.colors: List[ANSIColor] = []
+        self.colors: List[Color] = []
         for attr_name in self.__dir__():
             if not attr_name.startswith("_"):
                 attr = getattr(self, attr_name)
-                if isinstance(attr, ANSIColor):
+                if isinstance(attr, Color):
                     attr.set_name(attr_name)
                     self.colors.append(attr)
 
-    def from_rgb(self, color: Color) -> str:
-        diffs = [(ansi, ansi.compare(color)) for ansi in self.colors]
+    def from_rgb(self, rgb: RGB) -> Color:
+        diffs = [(ansi, ansi.compare(rgb)) for ansi in self.colors]
         most_likely = max(diffs, key=lambda d: d[1])[0]
-        return most_likely.code
+        return most_likely
 
 
-class ANSIColorConverterInvertBW(ANSIColorConverter):
-    BLACK = ANSIColor(colorama.Fore.BLACK, Color(0xff, 0xff, 0xff))
-    WHITE = ANSIColor(colorama.Fore.WHITE, Color(0x40, 0x40, 0x40))
-    LIGHTBLACK = ANSIColor(colorama.Fore.LIGHTBLACK_EX, Color(0xc0, 0xc0, 0xc0))
-    LIGHTWHITE = ANSIColor(colorama.Fore.LIGHTWHITE_EX, Color(0x00, 0x00, 0x00))
+class ColorConverterInvertBW(ColorConverter):
+    BLACK = Color(RGB(0xff, 0xff, 0xff), Fore.BLACK)
+    WHITE = Color(RGB(0x40, 0x40, 0x40), Fore.WHITE)
+    LIGHTBLACK = Color(RGB(0xc0, 0xc0, 0xc0), Fore.LIGHTBLACK_EX)
+    LIGHTWHITE = Color(RGB(0x00, 0x00, 0x00), Fore.LIGHTWHITE_EX)

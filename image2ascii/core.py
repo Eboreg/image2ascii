@@ -165,6 +165,9 @@ class Image2ASCII:
                     if start_y + y == self.boolmatrix.height:
                         break
                     for x in range(self.section_width):
+                        # Perhaps there could be overflow horizontally as well
+                        if start_x + x == self.boolmatrix.width:
+                            break
                         pixel_value = self.boolmatrix[start_y + y][start_x + x]
                         section[y][x] = pixel_value
                         if pixel_value and self.color:

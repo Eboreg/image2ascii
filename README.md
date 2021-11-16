@@ -27,7 +27,7 @@ Converts images to ASCII, with a twist; it traces edges in the image and attempt
                  °?booood°
 ```
 
-It can also crop, output ANSI colour, adjust contrast/colour balance/brightness, invert, and other nice stuff, as well as output to HTML.
+It can also crop, output ANSI colour, adjust contrast/colour balance/brightness, invert, and other nice stuff, as well as render HTML.
 
 ## Installation
 
@@ -42,7 +42,7 @@ source .venv/bin/activate
 
 ### CLI
 
-Installation instructions above creates an `image2ascii` command, run it for more info. Play around with various combinations of `--invert`, `--invert-colors`, and `--swap-bw`, until the results are to your liking.
+Installation per instructions above creates an `image2ascii` command; run it for more info. Play around with various combinations of `--invert`, `--invert-colors`, and `--swap-bw`, until the results are to your liking. `--crop` is also highly recommended.
 
 ### HTML
 
@@ -55,13 +55,13 @@ from image2ascii.output import HTMLFormatter
 print(Image2ASCII("image.png").prepare().render(formatter=HTMLFormatter()))
 ```
 
-But you are a highly cultured individual who shouldn't settle for that baseline. Check out the `Image2ASCII` class for more options, and remember to always run `prepare()` before the final `render()`.
+But you are a highly cultured individual who shouldn't settle for that sad and pathetic baseline. Check out the `Image2ASCII` class for more options, and remember to always run `prepare()` before the final `render()`.
 
 ## Everything you never wanted to know but somehow are reading right now anyway
 
 This project is totally in alpha and makes no guarantees for anything whatsoever.
 
-Uses:
+Shouts out to:
 * [Pillow](https://python-pillow.org/)
 * [Matplotlib](https://matplotlib.org/)
 * [Colorama](https://github.com/tartley/colorama)

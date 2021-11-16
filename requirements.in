@@ -1,9 +1,6 @@
-autopep8
+file:./
 colorama
-flake8
-ipdb
-ipython
+Jinja2
 matplotlib
-mypy
 Pillow
-types-Pillow
+Werkzeug

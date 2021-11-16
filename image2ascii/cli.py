@@ -2,6 +2,7 @@
 
 import argparse
 import time
+from wsgiref.simple_server import make_server
 
 import colorama
 from colorama import Fore
@@ -9,6 +10,7 @@ from colorama import Fore
 from image2ascii import DEFAULT_ASCII_RATIO, DEFAULT_ASCII_WIDTH, DEFAULT_MIN_LIKENESS, DEFAULT_QUALITY, __version__
 from image2ascii.color import ColorConverterInvertBW
 from image2ascii.core import Image2ASCII
+from image2ascii.wsgi import Application
 
 
 def main():
@@ -59,6 +61,11 @@ def main():
              f"vertically, and vice versa. Default: {DEFAULT_ASCII_RATIO}."
     )
     parser.add_argument(
+        "--fill-all",
+        action="store_true",
+        help="Fill all characters except transparent ones."
+    )
+    parser.add_argument(
         "--min-likeness",
         "-ml",
         type=float,
@@ -96,6 +103,7 @@ def main():
         action="store_true",
         help="Makes black output characters white and vice versa; does not affect any other colours."
     )
+    parser.add_argument("--test-server", action="store_true", help="Fires up a test server on port 8000.")
     parser.add_argument(
         "--debug",
         action="store_true",
@@ -104,6 +112,12 @@ def main():
     parser.add_argument("--version", action="version", version=__version__)
 
     args = parser.parse_args()
+
+    if args.test_server:
+        print("Listening on port 8000")
+        httpd = make_server("localhost", 8000, Application())
+        httpd.serve_forever()
+        return
 
     if args.file is None:
         parser.print_help()
@@ -117,6 +131,7 @@ def main():
         quality=args.quality,
         ascii_ratio=args.ratio,
         invert=args.invert,
+        fill_all=args.fill_all,
     )
 
     i2a.enhance(args.contrast, args.brightness, args.color_balance)

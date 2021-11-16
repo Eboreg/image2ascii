@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="sv">
+
+<head>
+    <title>Image2ASCII</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="description" content="Fancy image to ASCII/ANSI converter" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet"
+        crossorigin="anonymous">
+    <style>
+        html,
+        body {
+            height: 100%;
+        }
+
+        a {
+            color: var(--bs-light);
+            font-weight: bold;
+        }
+
+        pre {
+            line-height: 1rem;
+            margin-bottom: 0 !important;
+        }
+
+        .form-check-input:checked {
+            background-color: var(--bs-dark);
+            border-color: var(--bs-gray-600);
+        }
+    </style>
+</head>
+
+<body class="bg-dark text-light">
+    <div class="d-flex flex-column h-100">
+        <header class="bg-black py-3">
+            <div class="container">
+                <h1>Image2ASCII</h1>
+                <p class="m-0"></p>
+            </div>
+        </header>
+
+        <div class="flex-grow-1 bg-dark">
+            <div class="container">
+                <div class="my-4">
+                    <form action="" method="post" id="form" enctype="multipart/form-data">
+                        <div class="input-group mb-3">
+                            <input type="file" name="image" id="image" class="form-control" required>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-12 col-md-4 mb-3">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" name="color" id="color" value="true"
+                                        {% if color %} checked{% endif %}>
+                                    <label class="form-check-label" for="color">Colour</label>
+                                    <div class="form-text">Outputs in glorious ANSI colour.</div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-4 mb-3">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" name="crop" id="crop" value="true"
+                                        {% if crop %} checked{% endif %}>
+                                    <label class="form-check-label" for="crop">Crop</label>
+                                    <div class="form-text">Crops empty areas at all edges.</div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-4 mb-3">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" name="invert" id="invert"
+                                        value="true" {% if invert %} checked{% endif %}>
+                                    <label class="form-check-label" for="invert">Invert</label>
+                                    <div class="form-text">Fills characters that would have been empty, and vice versa.</div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-4 mb-3">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" name="invert-colors"
+                                        id="invert-colors" value="true" {% if invert_colors %} checked{% endif %}>
+                                    <label class="form-check-label" for="invert-colors">Invert colours</label>
+                                    <div class="form-text">Inverts the colours of the image before processing.</div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-4 mb-3">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" name="swap-bw" id="swap-bw"
+                                        value="true" {% if swap_bw %} checked{% endif %}>
+                                    <label class="form-check-label" for="swap-bw">Swap black/white characters</label>
+                                    <div class="form-text">Makes black output characters white and vice versa; does not affect any other colours.</div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-4 mb-3">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" name="fill-all"
+                                        id="fill-all" value="true"{% if fill_all %} checked{% endif %}{% if not color %} disabled{% endif %}>
+                                    <label class="form-check-label" for="fill-all">Fill all</label>
+                                    <div class="form-text">If checked, all sections of the image (except for any transparent ones) will be filled. Does not make any sense unless "colour" is also checked.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-12 col-md-4">
+                                <label for="contrast" class="form-label">Contrast</label>
+                                <div class="row">
+                                    <div class="col-auto flex-grow-1">
+                                        <input type="range" name="contrast" id="contrast" class="form-range" min="0" max="5"
+                                            step="0.1" value="{{ contrast }}">
+                                    </div>
+                                    <div id="contrast-value" class="col-auto">{{ contrast }}</div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label for="brightness" class="form-label">Brightness</label>
+                                <div class="row">
+                                    <div class="col-auto flex-grow-1">
+                                        <input type="range" name="brightness" id="brightness" class="form-range" min="0" max="5"
+                                            step="0.1" value="{{ brightness }}">
+                                    </div>
+                                    <div class="col-auto" id="brightness-value">{{ brightness }}</div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label for="color-balance" class="form-label">Colour balance</label>
+                                <div class="row">
+                                    <div class="col-auto flex-grow-1">
+                                        <input type="range" name="color-balance" id="color-balance" class="form-range" min="0"
+                                            max="5" step="0.1" value="{{ color_balance }}">
+                                    </div>
+                                    <div class="col-auto" id="color-balance-value">{{ color_balance }}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="submit" id="submit" class="btn btn-primary">Convert</button>
+                    </form>
+                </div>
+                {% if output %}
+                <div class="p-3 mb-4 border d-inline-block">{{ output }}</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <footer class="bg-black py-3">
+            <div class="container">
+                By Robert Huselius.
+                <a href="https://github.com/Eboreg">Here</a> is my Github,
+                <a href="https://odysee.com/@klaatu:0">here</a> is my Odysee channel, and
+                <a href="https://anchor.fm/musikens-makt">here</a> is my completely unrelated Swedish podcast.
+            </div>
+        </footer>
+    </div>
+    <script>
+        document.querySelector("#form").addEventListener("submit", () => {
+            document.querySelector("#submit").disabled = true;
+        })
+
+        document.querySelector("#color").addEventListener("input", event => {
+            document.querySelector("#fill-all").disabled = !event.target.checked;
+        })
+
+        document.querySelectorAll("input[type=range]").forEach(elem => {
+            elem.addEventListener("input", event => {
+                document.querySelector("#" + elem.id + "-value").textContent = event.target.value;
+            })
+        })
+    </script>
+</body>
+
+</html>

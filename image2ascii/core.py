@@ -6,10 +6,10 @@ from typing import Optional
 from PIL import Image, ImageEnhance, ImageOps
 
 from image2ascii import (
-    DEFAULT_ASCII_RATIO, DEFAULT_ASCII_WIDTH, DEFAULT_MIN_LIKENESS, DEFAULT_QUALITY, EMPTY_CHARACTER,
+    DEFAULT_ASCII_RATIO, DEFAULT_ASCII_WIDTH, DEFAULT_MIN_LIKENESS, DEFAULT_QUALITY, EMPTY_CHARACTER, FILLED_CHARACTER,
 )
 from image2ascii.color import RGB, ColorConverter
-from image2ascii.geometry import Matrix, Shape
+from image2ascii.geometry import CropBox, Matrix, Shape
 from image2ascii.output import ANSIFormatter, ASCIIFormatter, BaseFormatter, Output
 
 
@@ -43,6 +43,7 @@ class Image2ASCII:
     boolmatrix: Matrix[bool]
     color_converter: ColorConverter
     colormatrix: Matrix[tuple]
+    fill_all: bool
     image: Image.Image
     prepared: bool
     source_width: int
@@ -52,19 +53,21 @@ class Image2ASCII:
 
     def __init__(
         self,
-        filename: str,
+        file,
         ascii_width: int = DEFAULT_ASCII_WIDTH,
         quality: int = DEFAULT_QUALITY,
         ascii_ratio: float = DEFAULT_ASCII_RATIO,
         invert: bool = False,
+        fill_all: bool = False,
     ):
         self.invert = invert
         self.ascii_width = ascii_width
         self.quality = quality
         self.ascii_ratio = ascii_ratio
         self.color_converter = ColorConverter()
+        self.fill_all = fill_all
 
-        self.load(filename)
+        self.load(file)
 
     def set_color_converter(self, value: ColorConverter):
         if value.__class__ != self.color_converter.__class__:
@@ -96,6 +99,12 @@ class Image2ASCII:
             self.prepared = False
         return self
 
+    def set_fill_all(self, value: bool):
+        if value != self.fill_all:
+            self.fill_all = value
+            self.prepared = False
+        return self
+
     def enhance(self, contrast: float = 1.0, brightness: float = 1.0, color_balance: float = 1.0):
         self.image = enhance_image(self.image, contrast, brightness, color_balance)
         self.prepared = False
@@ -107,34 +116,61 @@ class Image2ASCII:
         return self
 
     def crop(self):
-        if not hasattr(self, "boolmatrix"):
-            self.boolmatrix = self.get_boolmatrix(self.image, self.invert)
+        if not hasattr(self, "boolmatrix") or not self.prepared:
+            self.boolmatrix = self.get_boolmatrix(self.image, self.fill_all, self.invert)
         box = self.boolmatrix.crop()
         self.image = self.image.crop(box)
         self.prepared = False
         return self
 
+    def resize(self):
+        """
+        Resize image to a multiple of the sizes of the sections it will be
+        divided into, with a width not exceeding self.ascii_width *
+        self.quality.
+        """
+        end_width = self.ascii_width * self.quality
+
+        if self.image.width < end_width and self.image.width % self.ascii_width:
+            # Image width is smaller than max and not an exact multiple of
+            # section widths; downsize it so it becomes so.
+            end_width = self.image.width - (self.image.width % self.ascii_width)
+
+        if self.image.width != end_width:
+            self.image = self.image.resize((end_width, round((end_width / self.image.width) * self.image.height)))
+            self.prepared = False
+
+        # Each character will represent an image section this large
+        self.section_width = int(self.image.width / self.ascii_width) or 1
+        self.section_height = int(self.section_width * self.ascii_ratio) or 1
+
+        # If image height is not an exact multiple of section heights, expand
+        # it vertically so it becomes so.
+        if self.image.height % self.section_height:
+            expand_height = self.section_height - (self.image.height % self.section_height)
+            box = CropBox(
+                left=0,
+                upper=(int(expand_height / 2) + expand_height % 2) * -1,
+                right=self.image.width,
+                lower=self.image.height + int(expand_height / 2)
+            )
+            self.image = self.image.crop(box)
+            self.prepared = False
+
+        self.source_width, self.source_height = self.image.width, self.image.height
+
     def prepare(self):
         """
         Must always be run after any changed settings and before render().
         """
-        # Downsize image to width (ascii_width * quality)
-        max_width = self.ascii_width * self.quality
-        if self.image.width > max_width:
-            self.image = self.image.resize((max_width, int((max_width / self.image.width) * self.image.height)))
-            self.boolmatrix = self.get_boolmatrix(self.image, self.invert)
-        elif not hasattr(self, "boolmatrix"):
-            self.boolmatrix = self.get_boolmatrix(self.image, self.invert)
+        self.resize()
 
-        self.source_width, self.source_height = self.image.width, self.image.height
+        if not self.prepared or not hasattr(self, "boolmatrix"):
+            self.boolmatrix = self.get_boolmatrix(self.image, self.fill_all, self.invert)
 
         # Save colours
         default = (0,) * len(self.image.getbands())
         self.colormatrix = Matrix(self.image.width, self.image.height, default, list(self.image.getdata()))
-
-        # Each character will represent an image section this large
-        self.section_width = int(self.source_width / self.ascii_width) or 1
-        self.section_height = int(self.section_width * self.ascii_ratio) or 1
 
         self.init_shapes(self.section_width, self.section_height)
 
@@ -142,25 +178,42 @@ class Image2ASCII:
 
         return self
 
-    def load(self, filename: str):
-        with Image.open(filename) as image:
+    def load(self, file):
+        with Image.open(file) as image:
             image.load()
         self.prepared = False
+        # Needs to be RGBA in order for any vertical lines added by
+        # self.resize() to become transparent
+        if image.mode != "RGBA":
+            image = image.convert("RGBA")
         self.image = image
         return self
 
-    def get_boolmatrix(self, image: Image.Image, invert=False) -> Matrix[bool]:
-        mono = image.convert("1", dither=Image.NONE)
-        if invert:
-            monodata = [v == 0 for v in list(mono.getdata())]
+    def get_boolmatrix(self, image: Image.Image, fill_all=False, invert=False) -> Matrix[bool]:
+        """
+        :param fill_all: If True, only transparent pixels (more precisely:
+            those with alpha < 0x80) will be considered filled. Otherwise,
+            filled/unfilled status will depend on whatever a conversion to
+            monochrome spits out.
+        :param invert: Reverses the filled/unfilled status for all pixels.
+        """
+        if fill_all:
+            if image.mode == "RGBA":
+                monodata = [v[-1] >= 0x80 for v in list(image.getdata())]
+            else:
+                monodata = [True] * image.width * image.height
         else:
+            mono = image.convert("1", dither=Image.NONE)
             monodata = [v != 0 for v in list(mono.getdata())]
-        if image.mode == "RGBA":
-            # Transparent pixels = False
-            for idx, pixel in enumerate(list(image.getdata())):
-                if pixel[-1] == 0:
-                    monodata[idx] = False
-        return Matrix(mono.width, mono.height, False, monodata)
+            if image.mode == "RGBA":
+                # Transparent pixels = False
+                for idx, pixel in enumerate(list(image.getdata())):
+                    if pixel[-1] < 0x80:
+                        monodata[idx] = False
+        if invert:
+            monodata = [not v for v in monodata]
+
+        return Matrix(image.width, image.height, False, monodata)
 
     def init_shapes(self, width: int, height: int):
         """
@@ -172,11 +225,11 @@ class Image2ASCII:
             Shape(char=char, points=points, width=width, height=height)
             for char, points in [
                 (EMPTY_CHARACTER, ((0, 0),)),
-                ("$", ((0, 0), (1, 0), (1, 1), (0, 1))),
-                (".", ((0, 0.8), (1, 0.8), (1, 1), (0, 1))),
-                ("°", ((0, 0), (1, 0), (1, 0.3), (0, 0.3))),
+                (FILLED_CHARACTER, ((0, 0), (1, 0), (1, 1), (0, 1))),
                 ("o", ((0, 0.5), (1, 0.5), (1, 1), (0, 1))),
                 ("*", ((0, 0), (1, 0), (1, 0.5), (0, 0.5))),
+                (".", ((0, 0.7), (1, 0.7), (1, 1), (0, 1))),
+                ("°", ((0, 0), (1, 0), (1, 0.3), (0, 0.3))),
                 ("b", ((0, 0), (1, 1), (0, 1))),
                 ("d", ((1, 0), (1, 1), (0, 1))),
                 ("P", ((0, 0), (1, 0), (0, 1))),

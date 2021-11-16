@@ -1,0 +1,8 @@
+-c requirements.txt
+autopep8
+awsebcli
+flake8
+ipdb
+ipython
+mypy
+types-Pillow

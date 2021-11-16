@@ -2,30 +2,7 @@
 
 Converts images to ASCII, with a twist; it traces edges in the image and attempts to render them with suitably formed characters, à la good old handmade ASCII art:
 
-```
-                     ..
-                .od$P°°?$bod°?b.
-             .odP°    P°  °b  °$
-           .d$P o  $.o$    $  .$
-          d$P  d°  °$ °b..ob.dP?.
-         .$P  d°    $.  °°  .oo.$.
-         d$°  $     °b      $$$$$b.
-        .$P   $      $      °?$$P$b
-        d$°   °?ooooP°           ?$.
-        ?$.     o  o             °$b
-        °$b    .$  $.             $$
-         ?$.   d   .B            .$P
-          ?$    °?P°            .d°
-           °?b.              ..od°
-          .dP °?bo.       .od°°
-         do.odP°°?$b  oo  $°
-                  $I  I$  $
-                  $I  I$  $
-                  $I  I$  °bo.
-                 .$I   °bo. .P
-                 dP     .dPd°
-                 °?booood°
-```
+![FECbm3SXoAM-EnY](https://user-images.githubusercontent.com/1786886/141609990-7e2c0471-2b13-45ff-bff8-c6fd2489c9fe.png)
 
 It can also crop, output ANSI colour, adjust contrast/colour balance/brightness, invert, and other nice stuff, as well as render HTML.
 

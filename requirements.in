@@ -1,4 +1,4 @@
-file:./
+-e file:./
 colorama
 Jinja2
 matplotlib

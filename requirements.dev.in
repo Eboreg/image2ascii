@@ -1,6 +1,6 @@
 -c requirements.txt
+-e file:./
 autopep8
-awsebcli
 flake8
 ipdb
 ipython

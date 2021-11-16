@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from statistics import mean
-from typing import Optional
+from typing import Optional, Type
 
 from PIL import Image, ImageEnhance, ImageOps
 
@@ -40,11 +40,14 @@ def invert_image(image: Image.Image) -> Image.Image:
 
 
 class Image2ASCII:
-    boolmatrix: Matrix[bool]
+    color: bool
     color_converter: ColorConverter
-    colormatrix: Matrix[tuple]
+    cropbox: Optional[CropBox]
     fill_all: bool
+    formatter_class: Type[BaseFormatter]
     image: Image.Image
+    min_likeness: float
+    output: Optional[Output]
     prepared: bool
     source_width: int
     source_height: int
@@ -66,62 +69,74 @@ class Image2ASCII:
         self.ascii_ratio = ascii_ratio
         self.color_converter = ColorConverter()
         self.fill_all = fill_all
+        self.formatter_class = ASCIIFormatter
+        self.color = False
+        self.min_likeness = DEFAULT_MIN_LIKENESS
+        self.output = None
+        self.cropbox = None
+        self.prepared = False
 
         self.load(file)
 
     def set_color_converter(self, value: ColorConverter):
         if value.__class__ != self.color_converter.__class__:
             self.color_converter = value
-            self.prepared = False
+            self.reset()
         return self
 
     def set_quality(self, value: int):
         if value != self.quality:
             self.quality = value
-            self.prepared = False
+            self.reset()
         return self
 
     def set_ascii_width(self, value: int):
         if value != self.ascii_width:
             self.ascii_width = value
-            self.prepared = False
+            self.reset()
         return self
 
     def set_ascii_ratio(self, value: float):
         if value != self.ascii_ratio:
             self.ascii_ratio = value
-            self.prepared = False
+            self.reset()
         return self
 
     def set_invert(self, value: bool):
         if value != self.invert:
             self.invert = value
-            self.prepared = False
+            self.reset()
         return self
 
     def set_fill_all(self, value: bool):
         if value != self.fill_all:
             self.fill_all = value
-            self.prepared = False
+            self.reset()
         return self
 
     def enhance(self, contrast: float = 1.0, brightness: float = 1.0, color_balance: float = 1.0):
         self.image = enhance_image(self.image, contrast, brightness, color_balance)
-        self.prepared = False
+        self.reset()
         return self
 
     def invert_colors(self):
         self.image = invert_image(self.image)
-        self.prepared = False
+        self.reset()
         return self
 
     def crop(self):
-        if not hasattr(self, "boolmatrix") or not self.prepared:
-            self.boolmatrix = self.get_boolmatrix(self.image, self.fill_all, self.invert)
-        box = self.boolmatrix.crop()
-        self.image = self.image.crop(box)
-        self.prepared = False
+        boolmatrix = self.get_boolmatrix()
+
+        self.cropbox = boolmatrix.get_crop_box()
+        self.image = self.image.crop(self.cropbox)
+
+        self.reset()
+
         return self
+
+    def reset(self):
+        self.output = None
+        self.prepared = False
 
     def resize(self):
         """
@@ -131,14 +146,12 @@ class Image2ASCII:
         """
         end_width = self.ascii_width * self.quality
 
-        if self.image.width < end_width and self.image.width % self.ascii_width:
-            # Image width is smaller than max and not an exact multiple of
-            # section widths; downsize it so it becomes so.
+        if self.image.width < end_width:
             end_width = self.image.width - (self.image.width % self.ascii_width)
 
         if self.image.width != end_width:
             self.image = self.image.resize((end_width, round((end_width / self.image.width) * self.image.height)))
-            self.prepared = False
+            self.reset()
 
         # Each character will represent an image section this large
         self.section_width = int(self.image.width / self.ascii_width) or 1
@@ -155,33 +168,24 @@ class Image2ASCII:
                 lower=self.image.height + int(expand_height / 2)
             )
             self.image = self.image.crop(box)
-            self.prepared = False
+            self.reset()
 
         self.source_width, self.source_height = self.image.width, self.image.height
 
     def prepare(self):
-        """
-        Must always be run after any changed settings and before render().
-        """
-        self.resize()
-
-        if not self.prepared or not hasattr(self, "boolmatrix"):
-            self.boolmatrix = self.get_boolmatrix(self.image, self.fill_all, self.invert)
-
-        # Save colours
-        default = (0,) * len(self.image.getbands())
-        self.colormatrix = Matrix(self.image.width, self.image.height, default, list(self.image.getdata()))
-
-        self.init_shapes(self.section_width, self.section_height)
-
+        if not self.prepared:
+            self.resize()
+            self.init_shapes()
         self.prepared = True
 
-        return self
+    def get_colormatrix(self) -> Matrix[tuple]:
+        default = (0,) * len(self.image.getbands())
+        return Matrix(self.image.width, self.image.height, default, list(self.image.getdata()))
 
     def load(self, file):
         with Image.open(file) as image:
             image.load()
-        self.prepared = False
+        self.reset()
         # Needs to be RGBA in order for any vertical lines added by
         # self.resize() to become transparent
         if image.mode != "RGBA":
@@ -189,40 +193,40 @@ class Image2ASCII:
         self.image = image
         return self
 
-    def get_boolmatrix(self, image: Image.Image, fill_all=False, invert=False) -> Matrix[bool]:
+    def get_boolmatrix(self) -> Matrix[bool]:
         """
-        :param fill_all: If True, only transparent pixels (more precisely:
-            those with alpha < 0x80) will be considered filled. Otherwise,
+        If self.fill_all: Only transparent pixels (more precisely: those with
+            alpha < 0x80) will be considered filled. Otherwise,
             filled/unfilled status will depend on whatever a conversion to
             monochrome spits out.
-        :param invert: Reverses the filled/unfilled status for all pixels.
+        If self.invert: Reverses the filled/unfilled status for all pixels.
         """
-        if fill_all:
-            if image.mode == "RGBA":
-                monodata = [v[-1] >= 0x80 for v in list(image.getdata())]
+        if self.fill_all:
+            if self.image.mode == "RGBA":
+                monodata = [v[-1] >= 0x80 for v in list(self.image.getdata())]
             else:
-                monodata = [True] * image.width * image.height
+                monodata = [True] * self.image.width * self.image.height
         else:
-            mono = image.convert("1", dither=Image.NONE)
+            mono = self.image.convert("1", dither=Image.NONE)
             monodata = [v != 0 for v in list(mono.getdata())]
-            if image.mode == "RGBA":
+            if self.image.mode == "RGBA":
                 # Transparent pixels = False
-                for idx, pixel in enumerate(list(image.getdata())):
+                for idx, pixel in enumerate(list(self.image.getdata())):
                     if pixel[-1] < 0x80:
                         monodata[idx] = False
-        if invert:
+        if self.invert:
             monodata = [not v for v in monodata]
 
-        return Matrix(image.width, image.height, False, monodata)
+        return Matrix(self.image.width, self.image.height, False, monodata)
 
-    def init_shapes(self, width: int, height: int):
+    def init_shapes(self):
         """
         Ordering is relevant for performance; start with completely filled and
         completely empty shapes, then try and order them by size of filled
         area (smallest first).
         """
         self.shapes = [
-            Shape(char=char, points=points, width=width, height=height)
+            Shape(char=char, points=points, width=self.section_width, height=self.section_height)
             for char, points in [
                 (EMPTY_CHARACTER, ((0, 0),)),
                 (FILLED_CHARACTER, ((0, 0), (1, 0), (1, 1), (0, 1))),
@@ -239,7 +243,7 @@ class Image2ASCII:
 
     def render(
         self,
-        formatter: Optional[BaseFormatter] = None,
+        formatter_class: Optional[Type[BaseFormatter]] = None,
         color=False,
         min_likeness: float = DEFAULT_MIN_LIKENESS
     ):
@@ -250,48 +254,59 @@ class Image2ASCII:
         each section and concatenates them together. Then renders the result
         in the selected format.
         """
-        assert self.prepared, "You need to run prepare() before render()"
+        self.prepare()
 
-        if formatter is None:
+        boolmatrix = self.get_boolmatrix()
+
+        if formatter_class is None:
             if color:
-                formatter = ANSIFormatter()
+                formatter_class = ANSIFormatter
             else:
-                formatter = ASCIIFormatter()
+                formatter_class = ASCIIFormatter
 
-        output = Output(formatter)
-        last_color = None
+        if formatter_class != self.formatter_class:
+            self.output = None
+            self.formatter_class = formatter_class
 
-        for start_y in range(0, self.source_height, self.section_height):
-            for start_x in range(0, self.source_width, self.section_width):
-                section = Matrix(self.section_width, self.section_height, False)
-                section_colors = []
-                # Loop over all pixels in section
-                for y in range(self.section_height):
-                    # The last row of sections will most likely extend a bit
-                    # further down than the image height
-                    if start_y + y == self.boolmatrix.height:
-                        break
-                    for x in range(self.section_width):
-                        # Perhaps there could be overflow horizontally as well
-                        if start_x + x == self.boolmatrix.width:
-                            break
-                        pixel_value = self.boolmatrix[start_y + y][start_x + x]
-                        section[y][x] = pixel_value
-                        if pixel_value and color:
-                            section_colors.append(self.colormatrix[start_y + y][start_x + x])
-                if section:
-                    if color and section_colors:
-                        color_value = [
-                            mean([c[idx] for c in section_colors])
-                            for idx in range(3)
-                        ]
-                        new_color = self.color_converter.from_rgb(RGB(*color_value))
-                        if new_color != last_color:
-                            output.add_color(new_color)
-                            last_color = new_color
-                    output.add_text(self.get_char(section, min_likeness))
-            output.add_br()
-        return output.render()
+        if color != self.color:
+            self.output = None
+            self.color = color
+
+        if min_likeness != self.min_likeness:
+            self.output = None
+            self.min_likeness = min_likeness
+
+        if self.output is None:
+            self.output = Output(formatter_class)
+
+            if color:
+                last_color = None
+                colormatrix = self.get_colormatrix()
+
+            for start_y in range(0, self.source_height, self.section_height):
+                for start_x in range(0, self.source_width, self.section_width):
+                    section = Matrix(self.section_width, self.section_height, False)
+                    section_colors = []
+                    # Loop over all pixels in section
+                    for y in range(self.section_height):
+                        for x in range(self.section_width):
+                            pixel_value = boolmatrix[start_y + y][start_x + x]
+                            section[y][x] = pixel_value
+                            if pixel_value and color:
+                                section_colors.append(colormatrix[start_y + y][start_x + x])
+                    if section:
+                        if color and section_colors:
+                            color_value = [
+                                mean([c[idx] for c in section_colors])
+                                for idx in range(3)
+                            ]
+                            new_color = self.color_converter.from_rgb(RGB(*color_value))
+                            if new_color != last_color:
+                                self.output.add_color(new_color)
+                                last_color = new_color
+                        self.output.add_text(self.get_char(section, min_likeness))
+                self.output.add_br()
+        return self.output.render()
 
     def get_char(self, section_matrix: Matrix, min_likeness: float) -> str:
         chars = []  # list of (char, likeness) tuples

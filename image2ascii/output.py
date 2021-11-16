@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Type
 
 from image2ascii.color import Color
 
@@ -62,10 +62,10 @@ class Output:
     rows: List[str]
     colors: Dict[Tuple[int, int], Color]  # {(x, y): color}
 
-    def __init__(self, formatter: Optional[BaseFormatter] = None):
-        if formatter is None:
-            formatter = ASCIIFormatter()
-        self.set_formatter(formatter)
+    def __init__(self, formatter_class: Optional[Type[BaseFormatter]] = None):
+        if formatter_class is None:
+            formatter_class = ASCIIFormatter
+        self.set_formatter(formatter_class)
         self.rows = []
         self.colors = {}
         self.row_ptr = 0
@@ -88,6 +88,6 @@ class Output:
     def render(self) -> str:
         return self.formatter.render(self.rows, self.colors)
 
-    def set_formatter(self, formatter: BaseFormatter):
-        assert isinstance(formatter, BaseFormatter), "Invalid formatter"
-        self.formatter = formatter
+    def set_formatter(self, formatter_class: Type[BaseFormatter]):
+        assert issubclass(formatter_class, BaseFormatter), "Invalid formatter"
+        self.formatter = formatter_class()

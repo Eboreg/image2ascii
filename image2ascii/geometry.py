@@ -32,19 +32,27 @@ class Matrix(UserList, Generic[_T]):
     def length(self) -> int:
         return self.width * self.height
 
-    def crop(self, box: Optional[CropBox] = None) -> CropBox:
+    def copy(self):
+        return self.__class__(
+            width=self.width,
+            height=self.height,
+            empty_value=self.empty_value,
+            data=[dd for d in self.data for dd in d]
+        )
+
+    def crop(self, box: CropBox):
         """
         If box is not given, crops away rows/columns with only
-        self.empty_value. Also returns the CropBox for convenience.
+        self.empty_value. Returns cropped copy of itself.
         """
-        box = box or self.get_crop_box()
-        self.data = self.data[box.upper:box.lower]
+        matrix = self.copy()
+        matrix.data = matrix.data[box.upper:box.lower]
         if box.left or box.right:
-            for idx, row in enumerate(self.data):
-                self.data[idx] = row[box.left:box.right]
-        self.width = box.right - box.left
-        self.height = box.lower - box.upper
-        return box
+            for idx, row in enumerate(matrix.data):
+                matrix.data[idx] = row[box.left:box.right]
+        matrix.width = box.right - box.left
+        matrix.height = box.lower - box.upper
+        return matrix
 
     def get_crop_box(self) -> CropBox:
         left, upper = 0, 0

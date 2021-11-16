@@ -79,9 +79,9 @@ class Application:
                 i2a.crop()
             if "swap-bw" in request.form:
                 i2a.set_color_converter(ColorConverterInvertBW())
-            i2a.prepare()
+
             return i2a.render(
-                formatter=HTMLFormatter(),
+                formatter_class=HTMLFormatter,
                 color="color" in request.form,
             )
         except Exception as e:

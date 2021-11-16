@@ -145,8 +145,6 @@ def main():
     if args.swap_bw:
         i2a.set_color_converter(ColorConverterInvertBW())
 
-    i2a.prepare()
-
     output = i2a.render(color=args.color, min_likeness=args.min_likeness)
 
     elapsed_time = time.monotonic() - start_time

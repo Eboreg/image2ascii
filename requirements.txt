@@ -4,14 +4,14 @@
 #
 #    pip-compile
 #
+-e file:./
+    # via -r requirements.in
 colorama==0.4.3
     # via
     #   -r requirements.in
     #   image2ascii
 cycler==0.11.0
     # via matplotlib
-file:./
-    # via -r requirements.in
 jinja2==3.0.3
     # via
     #   -r requirements.in
@@ -38,4 +38,6 @@ python-dateutil==2.8.2
 six==1.14.0
     # via python-dateutil
 werkzeug==2.0.2
-    # via -r requirements.in
+    # via
+    #   -r requirements.in
+    #   image2ascii

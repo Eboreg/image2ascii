@@ -8,8 +8,8 @@ import colorama
 from colorama import Fore
 
 from image2ascii import DEFAULT_ASCII_RATIO, DEFAULT_ASCII_WIDTH, DEFAULT_MIN_LIKENESS, DEFAULT_QUALITY, __version__
-from image2ascii.color import ColorConverterInvertBW
 from image2ascii.core import Image2ASCII
+from image2ascii.output import ANSIFormatter
 from image2ascii.wsgi import Application
 
 
@@ -125,37 +125,30 @@ def main():
 
     start_time = time.monotonic()
 
-    i2a = Image2ASCII(
-        args.file,
-        ascii_width=args.width,
-        quality=args.quality,
-        ascii_ratio=args.ratio,
+    i2a = Image2ASCII()
+
+    i2a.load(args.file)
+
+    i2a.color_settings(
+        color=args.color,
         invert=args.invert,
+        invert_colors=args.invert_colors,
         fill_all=args.fill_all,
+        swap_bw=args.swap_bw
     )
+    i2a.enhancement_settings(contrast=args.contrast, brightness=args.brightness, color_balance=args.color_balance)
+    i2a.quality_settings(quality=args.quality, min_likeness=args.min_likeness)
+    i2a.size_settings(ascii_width=args.width, ascii_ratio=args.ratio, crop=args.crop)
+    if args.color:
+        i2a.formatter_class = ANSIFormatter
 
-    i2a.enhance(args.contrast, args.brightness, args.color_balance)
-
-    if args.invert_colors:
-        i2a.invert_colors()
-
-    if args.crop:
-        i2a.crop()
-
-    if args.swap_bw:
-        i2a.set_color_converter(ColorConverterInvertBW())
-
-    output = i2a.render(color=args.color, min_likeness=args.min_likeness)
+    output = i2a.render()
 
     elapsed_time = time.monotonic() - start_time
 
     print(output)
 
     if args.debug:
-        print(f" *** source_width: {i2a.source_width}")
-        print(f" *** source_height: {i2a.source_height}")
-        print(f" *** section_width: {i2a.section_width}")
-        print(f" *** section_height: {i2a.section_height}")
         print(f" *** Conversion time: {elapsed_time} seconds")
 
 

@@ -9,6 +9,8 @@ config.ini
 **/*.png
 **/*.xcf
 *.csv
+**/notes.txt
+/shelf*
 
 # Elastic Beanstalk Files
 .elasticbeanstalk/*

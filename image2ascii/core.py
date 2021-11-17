@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 
 from statistics import mean
-from typing import Optional, Type
+from typing import List, Optional, Tuple, Type
 
 from PIL import Image, ImageEnhance, ImageOps
 
 from image2ascii import (
     DEFAULT_ASCII_RATIO, DEFAULT_ASCII_WIDTH, DEFAULT_MIN_LIKENESS, DEFAULT_QUALITY, EMPTY_CHARACTER, FILLED_CHARACTER,
 )
-from image2ascii.color import RGB, ColorConverter
-from image2ascii.geometry import CropBox, Matrix, Shape
-from image2ascii.output import ANSIFormatter, ASCIIFormatter, BaseFormatter, Output
+from image2ascii.color import RGB, ColorConverter, ColorConverterInvertBW
+from image2ascii.geometry import BaseShape, CropBox, EmptyShape, FilledShape, Matrix, PolygonShape
+from image2ascii.output import ANSIFormatter, BaseFormatter, Output
 
 
 def enhance_image(
@@ -40,147 +40,278 @@ def invert_image(image: Image.Image) -> Image.Image:
 
 
 class Image2ASCII:
-    color: bool
-    color_converter: ColorConverter
-    cropbox: Optional[CropBox]
-    fill_all: bool
-    formatter_class: Type[BaseFormatter]
-    image: Image.Image
-    min_likeness: float
-    output: Optional[Output]
-    prepared: bool
-    source_width: int
-    source_height: int
-    section_width: int
-    section_height: int
+    _ascii_ratio: float = DEFAULT_ASCII_RATIO
+    _ascii_width: int = DEFAULT_ASCII_WIDTH
+    _brightness: float = 1.0
+    _color: bool = False
+    _color_balance: float = 1.0
+    _color_converter_class: Type[ColorConverter] = ColorConverter
+    _contrast: float = 1.0
+    _crop: bool = False
+    _fill_all: bool = False
+    _invert: bool = False
+    _invert_colors: bool = False
+    _min_likeness: float = DEFAULT_MIN_LIKENESS
+    _quality: int = DEFAULT_QUALITY
 
-    def __init__(
+    formatter_class: Type[BaseFormatter] = ANSIFormatter
+    image: Optional[Image.Image] = None
+    output: Optional[Output] = None
+
+    shapes: List[BaseShape]
+
+    """
+    PROPERTIES
+    """
+    @property
+    def ascii_ratio(self) -> float:
+        return self._ascii_ratio
+
+    @ascii_ratio.setter
+    def ascii_ratio(self, value: float):
+        if value != self._ascii_ratio:
+            self._ascii_ratio = value
+            self.reset()
+
+    @property
+    def ascii_width(self) -> int:
+        return self._ascii_width
+
+    @ascii_width.setter
+    def ascii_width(self, value: int):
+        if value != self._ascii_width:
+            self._ascii_width = value
+            self.reset()
+
+    @property
+    def brightness(self) -> float:
+        return self._brightness
+
+    @brightness.setter
+    def brightness(self, value: float):
+        if value != self._brightness:
+            self._brightness = value
+            self.reset()
+
+    @property
+    def color(self) -> bool:
+        return self._color
+
+    @color.setter
+    def color(self, value: bool):
+        if value != self._color:
+            self._color = value
+            self.reset()
+
+    @property
+    def color_balance(self) -> float:
+        return self._color_balance
+
+    @color_balance.setter
+    def color_balance(self, value: float):
+        if value != self._color_balance:
+            self._color_balance = value
+            self.reset()
+
+    @property
+    def color_converter_class(self) -> Type[ColorConverter]:
+        return self._color_converter_class
+
+    @color_converter_class.setter
+    def color_converter_class(self, value: Type[ColorConverter]):
+        if value != self._color_converter_class:
+            self._color_converter_class = value
+            self.reset()
+
+    @property
+    def contrast(self) -> float:
+        return self._contrast
+
+    @contrast.setter
+    def contrast(self, value: float):
+        if value != self._contrast:
+            self._contrast = value
+            self.reset()
+
+    @property
+    def crop(self) -> bool:
+        return self._crop
+
+    @crop.setter
+    def crop(self, value: bool):
+        if value != self._crop:
+            self._crop = value
+            self.reset()
+
+    @property
+    def fill_all(self) -> bool:
+        return self._fill_all
+
+    @fill_all.setter
+    def fill_all(self, value: bool):
+        if value != self._fill_all:
+            self._fill_all = value
+            self.reset()
+
+    @property
+    def invert(self) -> bool:
+        return self._invert
+
+    @invert.setter
+    def invert(self, value: bool):
+        if value != self._invert:
+            self._invert = value
+            self.reset()
+
+    @property
+    def invert_colors(self) -> bool:
+        return self._invert_colors
+
+    @invert_colors.setter
+    def invert_colors(self, value: bool):
+        if value != self._invert_colors:
+            self._invert_colors = value
+            self.reset()
+
+    @property
+    def min_likeness(self) -> float:
+        return self._min_likeness
+
+    @min_likeness.setter
+    def min_likeness(self, value: float):
+        if value != self._min_likeness:
+            self._min_likeness = value
+            self.reset()
+
+    @property
+    def quality(self) -> int:
+        return self._quality
+
+    @quality.setter
+    def quality(self, value: int):
+        if value != self._quality:
+            self._quality = value
+            self.reset()
+
+    """
+    CONVENIENCE SETTINGS METHODS
+    """
+    def color_settings(
         self,
-        file,
-        ascii_width: int = DEFAULT_ASCII_WIDTH,
-        quality: int = DEFAULT_QUALITY,
-        ascii_ratio: float = DEFAULT_ASCII_RATIO,
-        invert: bool = False,
-        fill_all: bool = False,
+        color: Optional[bool] = None,
+        invert: Optional[bool] = None,
+        invert_colors: Optional[bool] = None,
+        fill_all: Optional[bool] = None,
+        swap_bw: Optional[bool] = None
     ):
-        self.invert = invert
-        self.ascii_width = ascii_width
-        self.quality = quality
-        self.ascii_ratio = ascii_ratio
-        self.color_converter = ColorConverter()
-        self.fill_all = fill_all
-        self.formatter_class = ASCIIFormatter
-        self.color = False
-        self.min_likeness = DEFAULT_MIN_LIKENESS
-        self.output = None
-        self.cropbox = None
-        self.prepared = False
+        if color is not None:
+            self.color = color
+        if invert is not None:
+            self.invert = invert
+        if invert_colors is not None:
+            self.invert_colors = invert_colors
+        if fill_all is not None:
+            self.fill_all = fill_all
+        if swap_bw is not None:
+            self.color_converter_class = ColorConverterInvertBW if swap_bw else ColorConverter
 
-        self.load(file)
+    def enhancement_settings(
+        self,
+        contrast: Optional[float] = None,
+        brightness: Optional[float] = None,
+        color_balance: Optional[float] = None
+    ):
+        if contrast is not None:
+            self.contrast = contrast
+        if brightness is not None:
+            self.brightness = brightness
+        if color_balance is not None:
+            self.color_balance = color_balance
 
-    def set_color_converter(self, value: ColorConverter):
-        if value.__class__ != self.color_converter.__class__:
-            self.color_converter = value
-            self.reset()
-        return self
+    def quality_settings(self, quality: Optional[int] = None, min_likeness: Optional[float] = None):
+        if quality is not None:
+            self.quality = quality
+        if min_likeness is not None:
+            self.min_likeness = min_likeness
 
-    def set_quality(self, value: int):
-        if value != self.quality:
-            self.quality = value
-            self.reset()
-        return self
+    def size_settings(
+        self,
+        ascii_width: Optional[int] = None,
+        ascii_ratio: Optional[float] = None,
+        crop: Optional[bool] = None
+    ):
+        if ascii_width is not None:
+            self.ascii_width = ascii_width
+        if ascii_ratio is not None:
+            self.ascii_ratio = ascii_ratio
+        if crop is not None:
+            self.crop = crop
 
-    def set_ascii_width(self, value: int):
-        if value != self.ascii_width:
-            self.ascii_width = value
-            self.reset()
-        return self
+    """
+    THE REST OF THE JAZZ
+    """
+    def do_crop(self, image: Image.Image) -> Image.Image:
+        if self.crop:
+            boolmatrix = self.get_boolmatrix(image)
+            cropbox = boolmatrix.get_crop_box()
+            image = image.crop(cropbox)
+        return image
 
-    def set_ascii_ratio(self, value: float):
-        if value != self.ascii_ratio:
-            self.ascii_ratio = value
-            self.reset()
-        return self
-
-    def set_invert(self, value: bool):
-        if value != self.invert:
-            self.invert = value
-            self.reset()
-        return self
-
-    def set_fill_all(self, value: bool):
-        if value != self.fill_all:
-            self.fill_all = value
-            self.reset()
-        return self
-
-    def enhance(self, contrast: float = 1.0, brightness: float = 1.0, color_balance: float = 1.0):
-        self.image = enhance_image(self.image, contrast, brightness, color_balance)
-        self.reset()
-        return self
-
-    def invert_colors(self):
-        self.image = invert_image(self.image)
-        self.reset()
-        return self
-
-    def crop(self):
-        boolmatrix = self.get_boolmatrix()
-
-        self.cropbox = boolmatrix.get_crop_box()
-        self.image = self.image.crop(self.cropbox)
-
-        self.reset()
-
-        return self
+    def do_enhance(self, image: Image.Image) -> Image.Image:
+        return enhance_image(image, self.contrast, self.brightness, self.color_balance)
 
     def reset(self):
         self.output = None
-        self.prepared = False
 
-    def resize(self):
+    def do_resize(self, image: Image.Image) -> Tuple[int, int, Image.Image]:
         """
         Resize image to a multiple of the sizes of the sections it will be
         divided into, with a width not exceeding self.ascii_width *
         self.quality.
+
+        Returns: section_width, section_height, resized image
         """
         end_width = self.ascii_width * self.quality
 
-        if self.image.width < end_width:
-            end_width = self.image.width - (self.image.width % self.ascii_width)
+        if image.width < end_width:
+            end_width = image.width - (image.width % self.ascii_width)
 
-        if self.image.width != end_width:
-            self.image = self.image.resize((end_width, round((end_width / self.image.width) * self.image.height)))
-            self.reset()
+        if image.width != end_width:
+            image = image.resize((end_width, round((end_width / image.width) * image.height)))
 
         # Each character will represent an image section this large
-        self.section_width = int(self.image.width / self.ascii_width) or 1
-        self.section_height = int(self.section_width * self.ascii_ratio) or 1
+        section_width = int(image.width / self.ascii_width) or 1
+        section_height = int(section_width * self.ascii_ratio) or 1
 
         # If image height is not an exact multiple of section heights, expand
         # it vertically so it becomes so.
-        if self.image.height % self.section_height:
-            expand_height = self.section_height - (self.image.height % self.section_height)
+        if image.height % section_height:
+            expand_height = section_height - (image.height % section_height)
             box = CropBox(
                 left=0,
                 upper=(int(expand_height / 2) + expand_height % 2) * -1,
-                right=self.image.width,
-                lower=self.image.height + int(expand_height / 2)
+                right=image.width,
+                lower=image.height + int(expand_height / 2)
             )
-            self.image = self.image.crop(box)
-            self.reset()
+            image = image.crop(box)
 
-        self.source_width, self.source_height = self.image.width, self.image.height
+        return section_width, section_height, image
 
-    def prepare(self):
-        if not self.prepared:
-            self.resize()
-            self.init_shapes()
-        self.prepared = True
+    def prepare_image(self) -> Tuple[int, int, Image.Image]:
+        """
+        Returns: section_width, section_height, prepared image
+        """
+        if self.image is None:
+            raise ValueError("You need to run .load(file)")
+        image = self.do_crop(self.image)
+        section_width, section_height, image = self.do_resize(image)
+        image = self.do_enhance(image)
+        self.init_shapes(section_width, section_height)
+        return section_width, section_height, image
 
-    def get_colormatrix(self) -> Matrix[tuple]:
-        default = (0,) * len(self.image.getbands())
-        return Matrix(self.image.width, self.image.height, default, list(self.image.getdata()))
+    def get_colormatrix(self, image: Image.Image) -> Matrix[tuple]:
+        default = (0,) * len(image.getbands())
+        return Matrix(image.width, image.height, default, list(image.getdata()))
 
     def load(self, file):
         with Image.open(file) as image:
@@ -190,10 +321,13 @@ class Image2ASCII:
         # self.resize() to become transparent
         if image.mode != "RGBA":
             image = image.convert("RGBA")
+        # Downsize original if it's ridiculously large
+        if image.width > 2000 or image.height > 2000:
+            factor = 2000 / max(image.width, image.height)
+            image = image.resize((round(image.width * factor), round(image.height * factor)))
         self.image = image
-        return self
 
-    def get_boolmatrix(self) -> Matrix[bool]:
+    def get_boolmatrix(self, image: Image.Image) -> Matrix[bool]:
         """
         If self.fill_all: Only transparent pixels (more precisely: those with
             alpha < 0x80) will be considered filled. Otherwise,
@@ -202,34 +336,36 @@ class Image2ASCII:
         If self.invert: Reverses the filled/unfilled status for all pixels.
         """
         if self.fill_all:
-            if self.image.mode == "RGBA":
-                monodata = [v[-1] >= 0x80 for v in list(self.image.getdata())]
+            if image.mode == "RGBA":
+                monodata = [v[-1] >= 0x80 for v in list(image.getdata())]
             else:
-                monodata = [True] * self.image.width * self.image.height
+                monodata = [True] * image.width * image.height
         else:
-            mono = self.image.convert("1", dither=Image.NONE)
+            mono = image.convert("1", dither=Image.NONE)
             monodata = [v != 0 for v in list(mono.getdata())]
-            if self.image.mode == "RGBA":
+            if image.mode == "RGBA":
                 # Transparent pixels = False
-                for idx, pixel in enumerate(list(self.image.getdata())):
+                for idx, pixel in enumerate(list(image.getdata())):
                     if pixel[-1] < 0x80:
                         monodata[idx] = False
         if self.invert:
             monodata = [not v for v in monodata]
 
-        return Matrix(self.image.width, self.image.height, False, monodata)
+        return Matrix(image.width, image.height, False, monodata)
 
-    def init_shapes(self):
+    def init_shapes(self, section_width: int, section_height: int):
         """
         Ordering is relevant for performance; start with completely filled and
         completely empty shapes, then try and order them by size of filled
         area (smallest first).
         """
         self.shapes = [
-            Shape(char=char, points=points, width=self.section_width, height=self.section_height)
+            EmptyShape(EMPTY_CHARACTER),
+            FilledShape(FILLED_CHARACTER),
+        ]
+        self.shapes.extend([
+            PolygonShape(char=char, points=points, width=section_width, height=section_height)
             for char, points in [
-                (EMPTY_CHARACTER, ((0, 0),)),
-                (FILLED_CHARACTER, ((0, 0), (1, 0), (1, 1), (0, 1))),
                 ("o", ((0, 0.5), (1, 0.5), (1, 1), (0, 1))),
                 ("*", ((0, 0), (1, 0), (1, 0.5), (0, 0.5))),
                 (".", ((0, 0.7), (1, 0.7), (1, 1), (0, 1))),
@@ -239,14 +375,9 @@ class Image2ASCII:
                 ("P", ((0, 0), (1, 0), (0, 1))),
                 ("?", ((0, 0), (1, 0), (1, 1))),
             ]
-        ]
+        ])
 
-    def render(
-        self,
-        formatter_class: Optional[Type[BaseFormatter]] = None,
-        color=False,
-        min_likeness: float = DEFAULT_MIN_LIKENESS
-    ):
+    def render(self):
         """
         Divides image into (self.section_width, self.section_height) sized
         sections, or more specifically: extracts boolean matrices for each of
@@ -254,65 +385,47 @@ class Image2ASCII:
         each section and concatenates them together. Then renders the result
         in the selected format.
         """
-        self.prepare()
-
-        boolmatrix = self.get_boolmatrix()
-
-        if formatter_class is None:
-            if color:
-                formatter_class = ANSIFormatter
-            else:
-                formatter_class = ASCIIFormatter
-
-        if formatter_class != self.formatter_class:
-            self.output = None
-            self.formatter_class = formatter_class
-
-        if color != self.color:
-            self.output = None
-            self.color = color
-
-        if min_likeness != self.min_likeness:
-            self.output = None
-            self.min_likeness = min_likeness
-
         if self.output is None:
-            self.output = Output(formatter_class)
+            section_width, section_height, image = self.prepare_image()
+            self.output = Output()
+            boolmatrix = self.get_boolmatrix(image)
 
-            if color:
+            if self.color:
                 last_color = None
-                colormatrix = self.get_colormatrix()
+                colormatrix = self.get_colormatrix(image)
+                color_converter = self.color_converter_class()
 
-            for start_y in range(0, self.source_height, self.section_height):
-                for start_x in range(0, self.source_width, self.section_width):
-                    section = Matrix(self.section_width, self.section_height, False)
+            for start_y in range(0, image.height, section_height):
+                for start_x in range(0, image.width, section_width):
+                    section = Matrix(section_width, section_height, False)
                     section_colors = []
                     # Loop over all pixels in section
-                    for y in range(self.section_height):
-                        for x in range(self.section_width):
+                    for y in range(section_height):
+                        for x in range(section_width):
                             pixel_value = boolmatrix[start_y + y][start_x + x]
                             section[y][x] = pixel_value
-                            if pixel_value and color:
+                            if pixel_value and self.color:
                                 section_colors.append(colormatrix[start_y + y][start_x + x])
                     if section:
-                        if color and section_colors:
+                        if self.color and section_colors:
                             color_value = [
                                 mean([c[idx] for c in section_colors])
                                 for idx in range(3)
                             ]
-                            new_color = self.color_converter.from_rgb(RGB(*color_value))
+                            new_color = color_converter.from_rgb(RGB(*color_value))
                             if new_color != last_color:
                                 self.output.add_color(new_color)
                                 last_color = new_color
-                        self.output.add_text(self.get_char(section, min_likeness))
+                        self.output.add_text(self.get_char(section))
                 self.output.add_br()
-        return self.output.render()
+        return self.formatter_class(self.output).render()
 
-    def get_char(self, section_matrix: Matrix, min_likeness: float) -> str:
+    def get_char(self, section_matrix: Matrix) -> str:
         chars = []  # list of (char, likeness) tuples
+
         for shape in self.shapes:
             likeness = shape.likeness(section_matrix)
-            if likeness > min_likeness:
+            if likeness > self.min_likeness:
                 return shape.char
             chars.append((shape.char, likeness))
         return max(chars, key=lambda c: c[1])[0]

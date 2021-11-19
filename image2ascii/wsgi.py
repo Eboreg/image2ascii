@@ -31,7 +31,11 @@ class Application:
             return Session()
 
     def get_context(self, request: Request, session: Session) -> dict:
-        context: Dict[str, Any] = {}
+        context: Dict[str, Any] = dict(
+            contrast=1.0,
+            brightness=1.0,
+            color_balance=1.0,
+        )
         if request.method == "POST":
             context.update(
                 color="color" in request.form,

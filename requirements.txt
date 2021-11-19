@@ -27,7 +27,9 @@ matplotlib==3.5.0
     #   -r requirements.in
     #   image2ascii
 numpy==1.21.4
-    # via matplotlib
+    # via
+    #   -r requirements.in
+    #   matplotlib
 packaging==21.2
     # via
     #   matplotlib

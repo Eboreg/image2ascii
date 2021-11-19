@@ -44,8 +44,12 @@
             <div class="container">
                 <div class="my-4">
                     <form action="" method="post" id="form" enctype="multipart/form-data">
+                        {% if filename %}
+                        <div class="mb-3">Choose a new image below, or reuse the previous one: <strong>{{ filename }}</strong></div>
+                        {% endif %}
+
                         <div class="input-group mb-3">
-                            <input type="file" name="image" id="image" class="form-control" required>
+                            <input type="file" name="image" id="image" class="form-control"{% if not filename %} required{% endif %}>
                         </div>
 
                         <div class="row">

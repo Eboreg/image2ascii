@@ -71,8 +71,8 @@ def main():
         type=float,
         default=DEFAULT_MIN_LIKENESS,
         help="For each image section, decide on an ASCII character as soon as we find one whose shape is " +
-             "determined to be have at least this likeness (0.0 to 1.0) to the original. Note that a value of " +
-             f"1.0 may be insanely slow. Default: {DEFAULT_MIN_LIKENESS}."
+             "determined to be have at least this likeness (0.0 to 1.0) to the original. "
+             "Default: {DEFAULT_MIN_LIKENESS}."
     )
     parser.add_argument(
         "--contrast",
@@ -125,7 +125,7 @@ def main():
 
     start_time = time.monotonic()
 
-    i2a = Image2ASCII()
+    i2a = Image2ASCII(debug=args.debug)
 
     i2a.load(args.file)
 
@@ -149,7 +149,9 @@ def main():
     print(output)
 
     if args.debug:
-        print(f" *** Conversion time: {elapsed_time} seconds")
+        for funcname, timing in i2a.summarize_timing().items():
+            print(f"{funcname}: {timing[0]} executions, {round(timing[1], 10)} s")
+        print(f"Total time: {round(elapsed_time, 10)} s")
 
 
 if __name__ == "__main__":

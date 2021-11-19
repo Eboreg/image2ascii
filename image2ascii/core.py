@@ -1,42 +1,32 @@
 #!/usr/bin/env python3
 
-from statistics import mean
-from typing import List, Optional, Tuple, Type
+import functools
+import time
+from typing import Dict, List, Optional, Tuple, Type
 
+import numpy as np
 from PIL import Image, ImageEnhance, ImageOps
+from werkzeug.datastructures import FileStorage
 
 from image2ascii import (
     DEFAULT_ASCII_RATIO, DEFAULT_ASCII_WIDTH, DEFAULT_MIN_LIKENESS, DEFAULT_QUALITY, EMPTY_CHARACTER, FILLED_CHARACTER,
 )
 from image2ascii.color import RGB, ColorConverter, ColorConverterInvertBW
-from image2ascii.geometry import BaseShape, CropBox, EmptyShape, FilledShape, Matrix, PolygonShape
+from image2ascii.geometry import BaseShape, CropBox, EmptyShape, FilledShape, PolygonShape, get_crop_box
 from image2ascii.output import ANSIFormatter, BaseFormatter, Output
 
 
-def enhance_image(
-    image: Image.Image,
-    contrast: float = 1.0,
-    brightness: float = 1.0,
-    color_balance: float = 1.0,
-):
-    if contrast != 1.0:
-        image = ImageEnhance.Contrast(image).enhance(contrast)
-    if brightness != 1.0:
-        image = ImageEnhance.Brightness(image).enhance(brightness)
-    if color_balance != 1.0:
-        image = ImageEnhance.Color(image).enhance(color_balance)
-    return image
-
-
-def invert_image(image: Image.Image) -> Image.Image:
-    """
-    For some reason, PIL.ImageOps.invert() does not support RGBA.
-    This implementation leaves the alpha channel as it is.
-    """
-    if image.mode == "RGBA":
-        lut = [i for i in range(0xff, -1, -1)] * 3 + [i for i in range(0xff + 1)]
-        return image.point(lut)
-    return ImageOps.invert(image)
+def timer(func):
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        if not self.debug:
+            return func(self, *args, **kwargs)
+        start_time = time.monotonic()
+        ret = func(self, *args, **kwargs)
+        elapsed_time = time.monotonic() - start_time
+        self.timing.append((func.__name__, elapsed_time))
+        return ret
+    return wrapper
 
 
 class Image2ASCII:
@@ -53,12 +43,20 @@ class Image2ASCII:
     _invert_colors: bool = False
     _min_likeness: float = DEFAULT_MIN_LIKENESS
     _quality: int = DEFAULT_QUALITY
+    _swap_bw: bool = False
 
+    filename: Optional[str] = None
     formatter_class: Type[BaseFormatter] = ANSIFormatter
     image: Optional[Image.Image] = None
     output: Optional[Output] = None
 
+    debug: bool
     shapes: List[BaseShape]
+    timing: List
+
+    def __init__(self, debug: bool = False):
+        self.debug = debug
+        self.timing = []
 
     """
     PROPERTIES
@@ -193,6 +191,17 @@ class Image2ASCII:
             self._quality = value
             self.reset()
 
+    @property
+    def swap_bw(self) -> bool:
+        return self._swap_bw
+
+    @swap_bw.setter
+    def swap_bw(self, value: bool):
+        if value != self._swap_bw:
+            self._swap_bw = value
+            self.color_converter_class = ColorConverterInvertBW if value else ColorConverter
+            self.reset()
+
     """
     CONVENIENCE SETTINGS METHODS
     """
@@ -213,7 +222,7 @@ class Image2ASCII:
         if fill_all is not None:
             self.fill_all = fill_all
         if swap_bw is not None:
-            self.color_converter_class = ColorConverterInvertBW if swap_bw else ColorConverter
+            self.swap_bw = swap_bw
 
     def enhancement_settings(
         self,
@@ -250,19 +259,39 @@ class Image2ASCII:
     """
     THE REST OF THE JAZZ
     """
+    @timer
     def do_crop(self, image: Image.Image) -> Image.Image:
         if self.crop:
-            boolmatrix = self.get_boolmatrix(image)
-            cropbox = boolmatrix.get_crop_box()
+            matrix = self.get_matrix(image)
+            boolmatrix = matrix[:, :, -1]
+            cropbox = get_crop_box(boolmatrix)
             image = image.crop(cropbox)
         return image
 
+    @timer
     def do_enhance(self, image: Image.Image) -> Image.Image:
-        return enhance_image(image, self.contrast, self.brightness, self.color_balance)
+        if self.contrast != 1.0:
+            image = ImageEnhance.Contrast(image).enhance(self.contrast)
+        if self.brightness != 1.0:
+            image = ImageEnhance.Brightness(image).enhance(self.brightness)
+        if self.color_balance != 1.0:
+            image = ImageEnhance.Color(image).enhance(self.color_balance)
+        return image
 
-    def reset(self):
-        self.output = None
+    @timer
+    def do_invert(self, image: Image.Image) -> Image.Image:
+        """
+        For some reason, PIL.ImageOps.invert() does not support RGBA.
+        This implementation leaves the alpha channel as it is.
+        """
+        if self.invert_colors:
+            if image.mode == "RGBA":
+                lut = [i for i in range(0xff, -1, -1)] * 3 + [i for i in range(0xff + 1)]
+                return image.point(lut)
+            return ImageOps.invert(image)
+        return image
 
+    @timer
     def do_resize(self, image: Image.Image) -> Tuple[int, int, Image.Image]:
         """
         Resize image to a multiple of the sizes of the sections it will be
@@ -272,9 +301,6 @@ class Image2ASCII:
         Returns: section_width, section_height, resized image
         """
         end_width = self.ascii_width * self.quality
-
-        if image.width < end_width:
-            end_width = image.width - (image.width % self.ascii_width)
 
         if image.width != end_width:
             image = image.resize((end_width, round((end_width / image.width) * image.height)))
@@ -297,71 +323,66 @@ class Image2ASCII:
 
         return section_width, section_height, image
 
-    def prepare_image(self) -> Tuple[int, int, Image.Image]:
-        """
-        Returns: section_width, section_height, prepared image
-        """
-        if self.image is None:
-            raise ValueError("You need to run .load(file)")
-        image = self.do_crop(self.image)
-        section_width, section_height, image = self.do_resize(image)
-        image = self.do_enhance(image)
-        self.init_shapes(section_width, section_height)
-        return section_width, section_height, image
+    @timer
+    def get_char(self, nonzero_coords: List[Tuple[int, int]]) -> str:
+        chars = []  # list of (char, likeness) tuples
 
-    def get_colormatrix(self, image: Image.Image) -> Matrix[tuple]:
-        default = (0,) * len(image.getbands())
-        return Matrix(image.width, image.height, default, list(image.getdata()))
+        for shape in self.shapes:
+            likeness = shape.likeness(nonzero_coords)
+            if likeness > self.min_likeness:
+                return shape.char
+            chars.append((shape.char, likeness))
+        return max(chars, key=lambda c: c[1])[0]
 
-    def load(self, file):
-        with Image.open(file) as image:
-            image.load()
-        self.reset()
-        # Needs to be RGBA in order for any vertical lines added by
-        # self.resize() to become transparent
-        if image.mode != "RGBA":
-            image = image.convert("RGBA")
-        # Downsize original if it's ridiculously large
-        if image.width > 2000 or image.height > 2000:
-            factor = 2000 / max(image.width, image.height)
-            image = image.resize((round(image.width * factor), round(image.height * factor)))
-        self.image = image
-
-    def get_boolmatrix(self, image: Image.Image) -> Matrix[bool]:
+    @timer
+    def get_matrix(self, image: Image.Image):
         """
         If self.fill_all: Only transparent pixels (more precisely: those with
             alpha < 0x80) will be considered filled. Otherwise,
-            filled/unfilled status will depend on whatever a conversion to
-            monochrome spits out.
+            filled/unfilled status will be a result of transparency AND
+            whatever a conversion to monochrome spits out.
         If self.invert: Reverses the filled/unfilled status for all pixels.
         """
+        # Just some more intuitive aliases for the array indices:
+        R, G, B, A, W = 0, 1, 2, 3, 4
+
+        if not image.width or not image.height:
+            return np.empty((0, 0, 0))
+
+        bands = len(image.getbands())
+        arr = np.empty((image.width * image.height, bands + 1), dtype=np.uint8)
+        # Fill values 0..3 with R, G, B, A
+        arr[:, :bands] = np.array(image.getdata())
+
+        # Now to find the W (white) values:
         if self.fill_all:
-            if image.mode == "RGBA":
-                monodata = [v[-1] >= 0x80 for v in list(image.getdata())]
-            else:
-                monodata = [True] * image.width * image.height
+            # Pos W becomes 0 if pos A < 0x80, 1 otherwise
+            arr[:, W] = arr[:, A] >= 0x80
         else:
-            mono = image.convert("1", dither=Image.NONE)
-            monodata = [v != 0 for v in list(mono.getdata())]
-            if image.mode == "RGBA":
-                # Transparent pixels = False
-                for idx, pixel in enumerate(list(image.getdata())):
-                    if pixel[-1] < 0x80:
-                        monodata[idx] = False
+            # Calculate W values according to algorithm below, but alpha
+            # takes precedence (if A < 0x80, W is 0).
+            # https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image.convert
+            arr[:, W] = np.all((
+                arr[:, A] >= 0x80,
+                arr[:, R] * (299 / 1000) + arr[:, G] * (587 / 1000) + arr[:, B] * (114 / 1000) >= 0x80
+            ), axis=0)
+
         if self.invert:
-            monodata = [not v for v in monodata]
+            arr[:, W] = arr[:, W] == 0
 
-        return Matrix(image.width, image.height, False, monodata)
+        # Reshape to image.height rows and image.width columns
+        return arr.reshape(image.height, image.width, bands + 1)
 
+    @timer
     def init_shapes(self, section_width: int, section_height: int):
         """
         Ordering is relevant for performance; start with completely filled and
-        completely empty shapes, then try and order them by size of filled
-        area (smallest first).
+        completely empty shapes, then order them by which character you deem
+        to be more desirable.
         """
         self.shapes = [
-            EmptyShape(EMPTY_CHARACTER),
-            FilledShape(FILLED_CHARACTER),
+            EmptyShape(char=EMPTY_CHARACTER, width=section_width, height=section_height),
+            FilledShape(char=FILLED_CHARACTER, width=section_width, height=section_height),
         ]
         self.shapes.extend([
             PolygonShape(char=char, points=points, width=section_width, height=section_height)
@@ -377,6 +398,41 @@ class Image2ASCII:
             ]
         ])
 
+    @timer
+    def load(self, file):
+        if isinstance(file, str):
+            self.filename = file
+        elif isinstance(file, FileStorage):
+            self.filename = file.filename
+        elif hasattr(file, "name") and isinstance(file.name, str):
+            self.filename = file.name
+
+        with Image.open(file) as image:
+            image.load()
+        self.reset()
+        if image.mode != "RGBA":
+            image = image.convert("RGBA")
+        # Downsize original if it's ridiculously large
+        if image.width > 2000 or image.height > 2000:
+            factor = 2000 / max(image.width, image.height)
+            image = image.resize((round(image.width * factor), round(image.height * factor)))
+        self.image = image
+
+    @timer
+    def prepare_image(self) -> Tuple[int, int, Image.Image]:
+        """
+        Returns: section_width, section_height, prepared image
+        """
+        if self.image is None:
+            raise ValueError("You need to run .load(file)")
+        image = self.do_enhance(self.image)
+        image = self.do_invert(image)
+        image = self.do_crop(image)
+        section_width, section_height, image = self.do_resize(image)
+        self.init_shapes(section_width, section_height)
+        return section_width, section_height, image
+
+    @timer
     def render(self):
         """
         Divides image into (self.section_width, self.section_height) sized
@@ -388,44 +444,44 @@ class Image2ASCII:
         if self.output is None:
             section_width, section_height, image = self.prepare_image()
             self.output = Output()
-            boolmatrix = self.get_boolmatrix(image)
+            matrix = self.get_matrix(image)
 
             if self.color:
                 last_color = None
-                colormatrix = self.get_colormatrix(image)
                 color_converter = self.color_converter_class()
 
             for start_y in range(0, image.height, section_height):
                 for start_x in range(0, image.width, section_width):
-                    section = Matrix(section_width, section_height, False)
-                    section_colors = []
-                    # Loop over all pixels in section
-                    for y in range(section_height):
-                        for x in range(section_width):
-                            pixel_value = boolmatrix[start_y + y][start_x + x]
-                            section[y][x] = pixel_value
-                            if pixel_value and self.color:
-                                section_colors.append(colormatrix[start_y + y][start_x + x])
-                    if section:
-                        if self.color and section_colors:
-                            color_value = [
-                                mean([c[idx] for c in section_colors])
-                                for idx in range(3)
-                            ]
+                    section = matrix[start_y:start_y + section_height, start_x:start_x + section_width]
+                    if self.color:
+                        points = section.reshape(section_width * section_height, section.shape[-1])
+                        # Array of RGB arrays where point visibility is 1:
+                        section_colors = points[points[:, -1] > 0][:, :3]
+                        if section_colors.size:
+                            color_value = section_colors.mean(axis=0)  # (R, G, B)
                             new_color = color_converter.from_rgb(RGB(*color_value))
                             if new_color != last_color:
                                 self.output.add_color(new_color)
                                 last_color = new_color
-                        self.output.add_text(self.get_char(section))
+                    nonzero = np.nonzero(section[:, :, -1])
+                    if nonzero[0].size:
+                        # 1-indexed (x, y) coordinates of filled points:
+                        nonzero_coords = list(zip(nonzero[1] + 1, nonzero[0] + 1))
+                        char = self.get_char(nonzero_coords)
+                    else:
+                        char = EMPTY_CHARACTER
+                    self.output.add_text(char)
                 self.output.add_br()
         return self.formatter_class(self.output).render()
 
-    def get_char(self, section_matrix: Matrix) -> str:
-        chars = []  # list of (char, likeness) tuples
+    def reset(self):
+        self.output = None
 
-        for shape in self.shapes:
-            likeness = shape.likeness(section_matrix)
-            if likeness > self.min_likeness:
-                return shape.char
-            chars.append((shape.char, likeness))
-        return max(chars, key=lambda c: c[1])[0]
+    def summarize_timing(self):
+        result: Dict[str, Tuple[int, float]] = {}
+        for funcname, timing in self.timing:
+            if funcname in result:
+                result[funcname] = (result[funcname][0] + 1, result[funcname][1] + timing)
+            else:
+                result[funcname] = (1, timing)
+        return result

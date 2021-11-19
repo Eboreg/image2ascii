@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from jinja2 import Environment, PackageLoader
 from werkzeug.wrappers import Request, Response
@@ -31,28 +31,29 @@ class Application:
             return Session()
 
     def get_context(self, request: Request, session: Session) -> dict:
-        context = dict(
-            contrast=request.form.get("contrast", 1),
-            brightness=request.form.get("brightness", 1),
-            color_balance=request.form.get("color-balance", 1),
-        )
+        context: Dict[str, Any] = {}
         if request.method == "POST":
-            try:
-                i2a = self.get_i2a(request, session.i2a)
-                session.i2a = i2a
-                output = i2a.render()
-            except Exception as e:
-                output = str(e)
-
             context.update(
-                output=output,
                 color="color" in request.form,
                 invert="invert" in request.form,
                 crop="crop" in request.form,
                 invert_colors="invert-colors" in request.form,
                 swap_bw="swap-bw" in request.form,
                 fill_all="fill-all" in request.form,
+                contrast=request.form.get("contrast", 1),
+                brightness=request.form.get("brightness", 1),
+                color_balance=request.form.get("color-balance", 1),
             )
+
+            try:
+                i2a = self.get_i2a(request, session.i2a)
+                session.i2a = i2a
+                context.update(
+                    output=i2a.render(),
+                    filename=i2a.filename,
+                )
+            except Exception as e:
+                context.update(output=str(e))
         else:
             context.update(
                 color=True,
@@ -62,6 +63,20 @@ class Application:
                 swap_bw=False,
                 fill_all=False,
             )
+            if session.i2a:
+                context.update(
+                    output=session.i2a.render(),
+                    filename=session.i2a.filename,
+                    color=session.i2a.color,
+                    invert=session.i2a.invert,
+                    crop=session.i2a.crop,
+                    invert_colors=session.i2a.invert_colors,
+                    swap_bw=session.i2a.swap_bw,
+                    fill_all=session.i2a.fill_all,
+                    contrast=session.i2a.contrast,
+                    brightness=session.i2a.brightness,
+                    color_balance=session.i2a.color_balance,
+                )
         return context
 
     def get_html(self, context: dict) -> str:
@@ -70,7 +85,8 @@ class Application:
         return template.render(context)
 
     def get_response(self, request: Request, session: Session) -> Response:
-        # TODO: Check path. give 404 for non-root
+        if request.path != "/":
+            return Response("What are you trying to do?", status=404)
         if request.method == "HEAD":
             return Response()
         html = self.get_html(self.get_context(request, session))
@@ -83,12 +99,16 @@ class Application:
     def get_i2a(self, request: Request, i2a: Optional[Image2ASCII]) -> Image2ASCII:
         file = request.files.get("image")
 
+        if file is not None and not file.filename:
+            file = None
+
         if file is None and i2a is None:
             raise ValueError("You need to upload an image.")
         if i2a is None:
             i2a = Image2ASCII()
 
-        i2a.load(file)
+        if file is not None:
+            i2a.load(file)
 
         i2a.formatter_class = HTMLFormatter
         i2a.color_settings(
@@ -106,41 +126,6 @@ class Application:
         i2a.size_settings(crop="crop" in request.form)
 
         return i2a
-
-    def render_image(self, request: Request, i2a: Optional[Image2ASCII]) -> str:
-        # TODO: REMOVE
-        if request.method != "POST":
-            pass
-
-        try:
-            file = request.files.get("image")
-
-            if file is None and i2a is None:
-                raise ValueError("You need to upload an image.")
-            if i2a is None:
-                i2a = Image2ASCII()
-
-            i2a.load(file)
-
-            i2a.formatter_class = HTMLFormatter
-            i2a.color_settings(
-                color="color" in request.form,
-                invert="invert" in request.form,
-                invert_colors="invert-colors" in request.form,
-                fill_all="fill-all" in request.form,
-                swap_bw="swap-bw" in request.form
-            )
-            i2a.enhancement_settings(
-                contrast=float(request.form["contrast"]),
-                brightness=float(request.form["brightness"]),
-                color_balance=float(request.form["color-balance"]),
-            )
-            i2a.size_settings(crop="crop" in request.form)
-
-            return i2a.render()
-
-        except Exception as e:
-            return str(e)
 
 
 application = Application()

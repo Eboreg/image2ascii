@@ -2,7 +2,7 @@
 
 Converts images to ASCII, with a twist; it traces edges in the image and attempts to render them with suitably formed characters, à la good old handmade ASCII art:
 
-![FECbm3SXoAM-EnY](https://user-images.githubusercontent.com/1786886/141609990-7e2c0471-2b13-45ff-bff8-c6fd2489c9fe.png)
+![Donald Duck](https://user-images.githubusercontent.com/1786886/142641499-dcb967c9-1d8d-4ee2-8acd-aee4fd2845a8.png)
 
 It can also crop, output ANSI colour, adjust contrast/colour balance/brightness, invert, and other nice stuff, as well as render HTML.
 

@@ -27,12 +27,11 @@ This is the simplest possible way to render HTML:
 
 ```python
 from image2ascii.core import Image2ASCII
-from image2ascii.output import HTMLFormatter
 
-print(Image2ASCII("image.png").prepare().render(formatter=HTMLFormatter()))
+print(Image2ASCII("image.png").set_output_format("html").render())
 ```
 
-But you are a highly cultured individual who shouldn't settle for that sad and pathetic baseline. Check out the `Image2ASCII` class for more options, and remember to always run `prepare()` before the final `render()`.
+But you are a highly cultured individual who shouldn't settle for that sad and pathetic baseline. Check out the `Image2ASCII` class for more options.
 
 ## Everything you never wanted to know but somehow are reading right now anyway
 

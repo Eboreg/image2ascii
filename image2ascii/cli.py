@@ -125,9 +125,7 @@ def main():
 
     start_time = time.monotonic()
 
-    i2a = Image2ASCII(debug=args.debug)
-
-    i2a.load(args.file)
+    i2a = Image2ASCII(file=args.file, debug=args.debug)
 
     i2a.color_settings(
         color=args.color,

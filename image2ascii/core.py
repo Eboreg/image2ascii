@@ -13,7 +13,7 @@ from image2ascii import (
 )
 from image2ascii.color import RGB, ColorConverter, ColorConverterInvertBW
 from image2ascii.geometry import BaseShape, CropBox, EmptyShape, FilledShape, PolygonShape, get_crop_box
-from image2ascii.output import ANSIFormatter, BaseFormatter, Output
+from image2ascii.output import ANSIFormatter, BaseFormatter, HTMLFormatter, Output
 
 
 def timer(func):
@@ -54,9 +54,11 @@ class Image2ASCII:
     shapes: List[BaseShape]
     timing: List
 
-    def __init__(self, debug: bool = False):
+    def __init__(self, file=None, debug: bool = False):
         self.debug = debug
         self.timing = []
+        if file is not None:
+            self.load(file)
 
     """
     PROPERTIES
@@ -223,6 +225,7 @@ class Image2ASCII:
             self.fill_all = fill_all
         if swap_bw is not None:
             self.swap_bw = swap_bw
+        return self
 
     def enhancement_settings(
         self,
@@ -236,12 +239,14 @@ class Image2ASCII:
             self.brightness = brightness
         if color_balance is not None:
             self.color_balance = color_balance
+        return self
 
     def quality_settings(self, quality: Optional[int] = None, min_likeness: Optional[float] = None):
         if quality is not None:
             self.quality = quality
         if min_likeness is not None:
             self.min_likeness = min_likeness
+        return self
 
     def size_settings(
         self,
@@ -255,6 +260,14 @@ class Image2ASCII:
             self.ascii_ratio = ascii_ratio
         if crop is not None:
             self.crop = crop
+        return self
+
+    def set_output_format(self, value: str):
+        if value == "html":
+            self.formatter_class = HTMLFormatter
+        elif value in ("ascii", "ansi"):
+            self.formatter_class = ANSIFormatter
+        return self
 
     """
     THE REST OF THE JAZZ
@@ -417,6 +430,7 @@ class Image2ASCII:
             factor = 2000 / max(image.width, image.height)
             image = image.resize((round(image.width * factor), round(image.height * factor)))
         self.image = image
+        return self
 
     @timer
     def prepare_image(self) -> Tuple[int, int, Image.Image]:

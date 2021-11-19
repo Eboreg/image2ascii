@@ -41,3 +41,5 @@ Shouts out to:
 * [Pillow](https://python-pillow.org/)
 * [Matplotlib](https://matplotlib.org/)
 * [Colorama](https://github.com/tartley/colorama)
+* [Numpy](https://numpy.org/)
+* [Werkzeug](https://werkzeug.palletsprojects.com/)

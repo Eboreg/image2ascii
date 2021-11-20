@@ -155,7 +155,7 @@
         </div>
 
         <footer class="bg-black py-3">
-            <div class="container">
+            <div class="container small">
                 By Robert Huselius.
                 <a href="https://github.com/Eboreg/image2ascii">Here</a> are the sources for this thing,
                 <a href="https://odysee.com/@klaatu:0">here</a> is my completely unrelated Odysee channel, and
@@ -164,6 +164,8 @@
         </footer>
     </div>
     <script>
+        var imageWasRequired = document.querySelector("#image").required;
+
         document.querySelector("#form").addEventListener("submit", () => {
             document.querySelector("#submit").disabled = true;
         })
@@ -186,6 +188,9 @@
             if (event.target.value != "") {
                 document.querySelector("#fill-all").checked = true;
                 document.querySelector("#crop").checked = true;
+                document.querySelector("#image").required = false;
+            } else {
+                document.querySelector("#image").required = imageWasRequired;
             }
         });
 

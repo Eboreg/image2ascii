@@ -364,8 +364,7 @@ class Image2ASCII:
             whatever a conversion to monochrome spits out.
         If self.invert: Reverses the filled/unfilled status for all pixels.
         """
-        # Mnemonics for the minmax array:
-        MIN, MAX = 0, 1
+        MIN, MAX = 0, 1  # Mnemonics for the minmax array
 
         if not image.width or not image.height:
             return np.empty((0, 0, 0))

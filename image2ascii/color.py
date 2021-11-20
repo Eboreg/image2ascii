@@ -68,9 +68,6 @@ class Color:
     def hex(self) -> str:
         return self.rgb.hex
 
-    def set_name(self, name: str):
-        self.name = name
-
 
 class ColorConverter:
     BLACK = Color(RGB(0x00, 0x00, 0x00), Fore.BLACK)
@@ -97,7 +94,7 @@ class ColorConverter:
             if not attr_name.startswith("_"):
                 attr = getattr(self, attr_name)
                 if isinstance(attr, Color):
-                    attr.set_name(attr_name)
+                    attr.name = attr_name
                     self.colors.append(attr)
 
     def from_array(self, array: np.ndarray) -> Color:

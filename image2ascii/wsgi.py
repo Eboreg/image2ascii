@@ -22,7 +22,6 @@ class Application:
         request = Request(environ)
         session = self.get_session(request)
         response = self.get_response(request, session)
-        # response.set_cookie("session_id", uuid4())
         return response(environ, start_response)
 
     def get_session(self, request: Request) -> Session:

@@ -33,9 +33,9 @@ print(Image2ASCII("image.png").set_output_format("html").render())
 
 But you are a highly cultured individual who shouldn't settle for that sad and pathetic baseline. Check out the `Image2ASCII` class for more options.
 
-## Everything you never wanted to know but somehow are reading right now anyway
+## Everything you never wanted to know
 
-This project is totally in alpha and makes no guarantees for anything whatsoever.
+This project is totally in beta and makes no guarantees for anything whatsoever.
 
 Shouts out to:
 * [Pillow](https://python-pillow.org/)

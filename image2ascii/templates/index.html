@@ -184,11 +184,16 @@
             })
         })
 
-        document.querySelector("#flag").addEventListener("change", event => {
+        document.querySelector("#image").addEventListener("input", () => {
+            document.querySelector("#flag").value = "";
+        })
+
+        document.querySelector("#flag").addEventListener("input", event => {
             if (event.target.value != "") {
                 document.querySelector("#fill-all").checked = true;
                 document.querySelector("#crop").checked = true;
                 document.querySelector("#image").required = false;
+                document.querySelector("#image").value = "";
             } else {
                 document.querySelector("#image").required = imageWasRequired;
             }

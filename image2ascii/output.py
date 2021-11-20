@@ -77,6 +77,6 @@ class HTMLFormatter(BaseFormatter):
         output = ""
         if self.open_span:
             output += "</span>"
-        output += f"<span color=\"{color.hex}\">"
+        output += f"<span style=\"color:{color.hex}\">"
         self.open_span = True
         return output

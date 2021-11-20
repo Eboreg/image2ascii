@@ -44,12 +44,21 @@
             <div class="container">
                 <div class="my-4">
                     <form action="" method="post" id="form" enctype="multipart/form-data">
-                        {% if filename %}
-                        <div class="mb-3">Choose a new image below, or reuse the previous one: <strong>{{ filename }}</strong></div>
-                        {% endif %}
+                        <div class="mb-3 row">
+                            <div class="col-12 col-md-6">
+                                <label for="image" class="form-label">Upload an image{% if filename %}, or reuse the previous one: <strong>{{ filename }}</strong>{% endif %}</label>
+                                <input type="file" name="image" id="image" class="form-control"{% if not filename %} required{% endif %}>
+                            </div>
 
-                        <div class="input-group mb-3">
-                            <input type="file" name="image" id="image" class="form-control"{% if not filename %} required{% endif %}>
+                            <div class="col-12 col-md-6">
+                                <label for="flag" class="form-label">Or select a flag you like</label>
+                                <select name="flag" id="flag" class="form-select">
+                                    <option value=""></option>
+                                    {% for flag in flags %}
+                                    <option value="{{ flag.value }}"{% if selected_flag == flag.value %} selected{% endif %}>{{ flag.text }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
                         </div>
 
                         <div class="row">
@@ -135,7 +144,8 @@
                                 </div>
                             </div>
                         </div>
-                        <button type="submit" id="submit" class="btn btn-primary">Convert</button>
+                        <button type="submit" id="submit" class="btn btn-primary me-2">Convert</button>
+                        <button type="button" id="reset" class="btn btn-secondary">Reset adjustments</button>
                     </form>
                 </div>
                 {% if output %}
@@ -162,11 +172,37 @@
             document.querySelector("#fill-all").disabled = !event.target.checked;
         })
 
+        function onRangeChanged(elem, value) {
+            document.querySelector("#" + elem.id + "-value").textContent = Number(value).toPrecision(2);
+        }
+
         document.querySelectorAll("input[type=range]").forEach(elem => {
             elem.addEventListener("input", event => {
-                document.querySelector("#" + elem.id + "-value").textContent = event.target.value;
+                onRangeChanged(elem, event.target.value);
             })
         })
+
+        document.querySelector("#flag").addEventListener("change", event => {
+            if (event.target.value != "") {
+                document.querySelector("#fill-all").checked = true;
+                document.querySelector("#crop").checked = true;
+            }
+        });
+
+        document.querySelector("button#reset").addEventListener("click", () => {
+            ["#color", "#crop"].forEach(id => {
+                document.querySelector(id).checked = true;
+            });
+
+            ["#invert", "#invert-colors", "#swap-bw", "#fill-all"].forEach(id => {
+                document.querySelector(id).checked = false;
+            });
+
+            document.querySelectorAll("input[type=range]").forEach(elem => {
+                elem.value = 1;
+                onRangeChanged(elem, 1);
+            });
+        });
     </script>
 </body>
 

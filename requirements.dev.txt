@@ -12,6 +12,12 @@ autopep8==1.6.0
     # via -r requirements.dev.in
 backcall==0.2.0
     # via ipython
+beautifulsoup4==4.10.0
+    # via -r requirements.dev.in
+certifi==2021.10.8
+    # via requests
+charset-normalizer==2.0.7
+    # via requests
 colorama==0.4.4
     # via
     #   -c requirements.txt
@@ -30,6 +36,8 @@ fonttools==4.28.1
     # via
     #   -c requirements.txt
     #   matplotlib
+idna==3.3
+    # via requests
 ipdb==0.13.9
     # via -r requirements.dev.in
 ipython==7.29.0
@@ -103,6 +111,8 @@ python-dateutil==2.8.2
     # via
     #   -c requirements.txt
     #   matplotlib
+requests==2.26.0
+    # via -r requirements.dev.in
 setuptools-scm==6.3.2
     # via
     #   -c requirements.txt
@@ -111,6 +121,8 @@ six==1.16.0
     # via
     #   -c requirements.txt
     #   python-dateutil
+soupsieve==2.3.1
+    # via beautifulsoup4
 toml==0.10.2
     # via
     #   autopep8
@@ -126,8 +138,12 @@ traitlets==5.1.1
     #   matplotlib-inline
 types-pillow==8.3.7
     # via -r requirements.dev.in
+types-requests==2.26.0
+    # via -r requirements.dev.in
 typing-extensions==4.0.0
     # via mypy
+urllib3==1.26.7
+    # via requests
 wcwidth==0.2.5
     # via prompt-toolkit
 werkzeug==2.0.2

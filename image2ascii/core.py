@@ -11,9 +11,13 @@ from werkzeug.datastructures import FileStorage
 from image2ascii import (
     DEFAULT_ASCII_RATIO, DEFAULT_ASCII_WIDTH, DEFAULT_MIN_LIKENESS, DEFAULT_QUALITY, EMPTY_CHARACTER, FILLED_CHARACTER,
 )
-from image2ascii.color import RGB, ColorConverter, ColorConverterInvertBW
+from image2ascii.color import ColorConverter, ColorConverterInvertBW
 from image2ascii.geometry import BaseShape, CropBox, EmptyShape, FilledShape, PolygonShape, get_crop_box
 from image2ascii.output import ANSIFormatter, BaseFormatter, HTMLFormatter, Output
+
+# Mnemonics for colour array indices
+# (red, green, blue, alpha, saturation, luminance, visible):
+R, G, B, A, S, L, V = 0, 1, 2, 3, 4, 5, 6
 
 
 def timer(func):
@@ -274,8 +278,10 @@ class Image2ASCII:
     """
     @timer
     def do_crop(self, image: Image.Image) -> Image.Image:
+        image = self.do_resize(image)
         if self.crop:
             matrix = self.get_matrix(image)
+            # Expecting the last value to be a "white" boolean
             boolmatrix = matrix[:, :, -1]
             cropbox = get_crop_box(boolmatrix)
             image = image.crop(cropbox)
@@ -305,13 +311,11 @@ class Image2ASCII:
         return image
 
     @timer
-    def do_resize(self, image: Image.Image) -> Tuple[int, int, Image.Image]:
+    def do_resize(self, image: Image.Image) -> Image.Image:
         """
         Resize image to a multiple of the sizes of the sections it will be
         divided into, with a width not exceeding self.ascii_width *
         self.quality.
-
-        Returns: section_width, section_height, resized image
         """
         end_width = self.ascii_width * self.quality
 
@@ -334,7 +338,11 @@ class Image2ASCII:
             )
             image = image.crop(box)
 
-        return section_width, section_height, image
+        return image
+
+    def get_section_size(self, image: Image.Image) -> Tuple[int, int]:
+        section_width = int(image.width / self.ascii_width) or 1
+        return section_width, int(section_width * self.ascii_ratio) or 1
 
     @timer
     def get_char(self, nonzero_coords: List[Tuple[int, int]]) -> str:
@@ -351,40 +359,58 @@ class Image2ASCII:
     def get_matrix(self, image: Image.Image):
         """
         If self.fill_all: Only transparent pixels (more precisely: those with
-            alpha < 0x80) will be considered filled. Otherwise,
+            alpha < 0x80) will be considered unfilled. Otherwise,
             filled/unfilled status will be a result of transparency AND
             whatever a conversion to monochrome spits out.
         If self.invert: Reverses the filled/unfilled status for all pixels.
         """
-        # Just some more intuitive aliases for the array indices:
-        R, G, B, A, W = 0, 1, 2, 3, 4
+        # Mnemonics for the minmax array:
+        MIN, MAX = 0, 1
 
         if not image.width or not image.height:
             return np.empty((0, 0, 0))
 
-        bands = len(image.getbands())
-        arr = np.empty((image.width * image.height, bands + 1), dtype=np.uint8)
-        # Fill values 0..3 with R, G, B, A
-        arr[:, :bands] = np.array(image.getdata())
+        assert image.mode == "RGBA", "Image mode must be RGBA"
+
+        arr = np.empty((image.width * image.height, 7), dtype=np.uint8)
+
+        # Fill first 4 values with R, G, B, A
+        arr[:, :A + 1] = np.array(image.getdata())
+
+        # Array of (min colour value, max colour value) for each RGB colour,
+        # converted to percentages. 100 % of course represents 255.
+        minmax = np.empty((image.width * image.height, 2))
+        minmax[:, MIN] = arr[:, :B + 1].min(axis=1) / 0xff * 100
+        minmax[:, MAX] = arr[:, :B + 1].max(axis=1) / 0xff * 100
+
+        # Luminance = (min + max) / 2, also percentage
+        arr[:, L] = minmax.mean(axis=1)
+
+        # Saturation = (max - min) / (max + min), converted to percent
+        arr[:, S] = np.divide(
+            minmax[:, MAX] - minmax[:, MIN], minmax[:, MAX] + minmax[:, MIN],
+            out=np.zeros((image.width * image.height,)),
+            where=minmax[:, MAX] > 0  # avoid division by zero
+        ) * 100
 
         # Now to find the W (white) values:
         if self.fill_all:
             # Pos W becomes 0 if pos A < 0x80, 1 otherwise
-            arr[:, W] = arr[:, A] >= 0x80
+            arr[:, V] = arr[:, A] >= 0x80
         else:
             # Calculate W values according to algorithm below, but alpha
             # takes precedence (if A < 0x80, W is 0).
             # https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image.convert
-            arr[:, W] = np.all((
+            arr[:, V] = np.all((
                 arr[:, A] >= 0x80,
-                arr[:, R] * (299 / 1000) + arr[:, G] * (587 / 1000) + arr[:, B] * (114 / 1000) >= 0x80
+                arr[:, R] * 0.299 + arr[:, G] * 0.587 + arr[:, B] * 0.114 >= 0x80
             ), axis=0)
 
         if self.invert:
-            arr[:, W] = arr[:, W] == 0
+            arr[:, V] = arr[:, V] == 0
 
         # Reshape to image.height rows and image.width columns
-        return arr.reshape(image.height, image.width, bands + 1)
+        return arr.reshape(image.height, image.width, 7)
 
     @timer
     def init_shapes(self, section_width: int, section_height: int):
@@ -422,14 +448,15 @@ class Image2ASCII:
 
         with Image.open(file) as image:
             image.load()
-        self.reset()
         if image.mode != "RGBA":
             image = image.convert("RGBA")
         # Downsize original if it's ridiculously large
         if image.width > 2000 or image.height > 2000:
             factor = 2000 / max(image.width, image.height)
             image = image.resize((round(image.width * factor), round(image.height * factor)))
-        self.image = image
+        if image != self.image:
+            self.image = image
+            self.reset()
         return self
 
     @timer
@@ -442,7 +469,8 @@ class Image2ASCII:
         image = self.do_enhance(self.image)
         image = self.do_invert(image)
         image = self.do_crop(image)
-        section_width, section_height, image = self.do_resize(image)
+        image = self.do_resize(image)
+        section_width, section_height = self.get_section_size(image)
         self.init_shapes(section_width, section_height)
         return section_width, section_height, image
 
@@ -468,12 +496,15 @@ class Image2ASCII:
                 for start_x in range(0, image.width, section_width):
                     section = matrix[start_y:start_y + section_height, start_x:start_x + section_width]
                     if self.color:
+                        # Create a 2-d array of points:
                         points = section.reshape(section_width * section_height, section.shape[-1])
-                        # Array of RGB arrays where point visibility is 1:
-                        section_colors = points[points[:, -1] > 0][:, :3]
+                        # Filter for points where visibility is 1:
+                        section_colors = points[points[:, V] > 0]
                         if section_colors.size:
-                            color_value = section_colors.mean(axis=0)  # (R, G, B)
-                            new_color = color_converter.from_rgb(RGB(*color_value))
+                            # Get median value and reduce it to array of
+                            # R, G, B, S, L values:
+                            color_value = np.median(section_colors, axis=0)[np.array([R, G, B, S, L])]
+                            new_color = color_converter.from_array(color_value)
                             if new_color != last_color:
                                 self.output.add_color(new_color)
                                 last_color = new_color

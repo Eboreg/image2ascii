@@ -1,8 +1,11 @@
 -c requirements.txt
 -e file:./
 autopep8
+beautifulsoup4
 flake8
 ipdb
 ipython
 mypy
+requests
 types-Pillow
+types-requests

@@ -5,8 +5,8 @@ build
 dist
 image2ascii.egg-info
 config.ini
-**/*.jpg
-**/*.png
+/*.jpg
+/*.png
 **/*.xcf
 *.csv
 **/notes.txt

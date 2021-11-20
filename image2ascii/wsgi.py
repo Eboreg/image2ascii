@@ -1,4 +1,5 @@
 from datetime import timedelta
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from jinja2 import Environment, PackageLoader
@@ -15,6 +16,7 @@ class Application:
 
     def __init__(self):
         self.db = ShelfDB()
+        self.flag_dir = Path(__file__).parent / "flags"
 
     def __call__(self, environ, start_response):
         request = Request(environ)
@@ -35,6 +37,7 @@ class Application:
             contrast=1.0,
             brightness=1.0,
             color_balance=1.0,
+            flags=self.get_flags(),
         )
         if request.method == "POST":
             context.update(
@@ -47,6 +50,7 @@ class Application:
                 contrast=request.form.get("contrast", 1),
                 brightness=request.form.get("brightness", 1),
                 color_balance=request.form.get("color-balance", 1),
+                selected_flag=request.form.get("flag"),
             )
 
             try:
@@ -83,6 +87,11 @@ class Application:
                 )
         return context
 
+    def get_flags(self):
+        for flag_file in sorted(self.flag_dir.iterdir()):
+            if flag_file.is_file():
+                yield dict(value=flag_file.name, text=flag_file.stem)
+
     def get_html(self, context: dict) -> str:
         jinja = Environment(loader=PackageLoader("image2ascii", "templates"))
         template = jinja.get_template("index.html")
@@ -102,17 +111,20 @@ class Application:
 
     def get_i2a(self, request: Request, i2a: Optional[Image2ASCII]) -> Image2ASCII:
         file = request.files.get("image")
+        flag = request.form.get("flag") or None
 
         if file is not None and not file.filename:
             file = None
 
-        if file is None and i2a is None:
-            raise ValueError("You need to upload an image.")
+        if file is None and i2a is None and flag is None:
+            raise ValueError("You need to upload an image or select a flag.")
         if i2a is None:
             i2a = Image2ASCII()
 
         if file is not None:
             i2a.load(file)
+        elif flag is not None:
+            i2a.load(self.flag_dir / flag)
 
         i2a.formatter_class = HTMLFormatter
         i2a.color_settings(

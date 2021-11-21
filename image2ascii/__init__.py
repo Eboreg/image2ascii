@@ -1,4 +1,4 @@
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 VERSION = tuple(map(int, __version__.split(".")))
 DEFAULT_ASCII_RATIO = 2.0

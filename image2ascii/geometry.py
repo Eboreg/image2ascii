@@ -3,29 +3,9 @@ from typing import Iterable, List, SupportsFloat, Tuple
 
 from matplotlib.path import Path
 
+from image2ascii.utils import timer
+
 CropBox = namedtuple("CropBox", ["left", "upper", "right", "lower"], defaults=[0, 0, 0, 0])
-
-
-def get_crop_box(boolmatrix):
-    height, width = boolmatrix.shape
-
-    for left in range(width):
-        if boolmatrix[:, left].any():
-            break
-
-    for upper in range(height):
-        if boolmatrix[upper].any():
-            break
-
-    for right in range(width, left, -1):
-        if boolmatrix[:, right - 1].any():
-            break
-
-    for lower in range(height, upper, -1):
-        if boolmatrix[lower - 1].any():
-            break
-
-    return CropBox(left, upper, right, lower)
 
 
 class BaseShape:
@@ -43,6 +23,7 @@ class FilledShape(BaseShape):
     A completely filled shape, which means the likeness with any given
     boolmatrix is just the fraction of its members that are True.
     """
+    @timer
     def likeness(self, nonzero_coords: List[Tuple[int, int]]) -> float:
         # Let's just let division by 0 raise its exception
         return len(nonzero_coords) / self.box_size
@@ -53,6 +34,7 @@ class EmptyShape(BaseShape):
     A completely empty shape, which means the likeness with any given
     boolmatrix is just the fraction of its members that are False.
     """
+    @timer
     def likeness(self, nonzero_coords: List[Tuple[int, int]]) -> float:
         return (self.box_size - len(nonzero_coords)) / self.box_size
 
@@ -81,6 +63,7 @@ class PolygonShape(BaseShape):
         # Number of points NOT enclosed by this shape:
         self.unfilled_size = self.box_size - self.filled_size
 
+    @timer
     def likeness(self, nonzero_coords: List[Tuple[int, int]]) -> float:
         """
         Returns fraction of filled points conforming to the shape.

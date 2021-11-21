@@ -5,6 +5,7 @@ import numpy as np
 from colorama import Fore, ansi
 
 from image2ascii import EMPTY_CHARACTER
+from image2ascii.utils import timer
 
 ANSI_COLOR_PATTERN = re.escape(ansi.CSI) + r"\d+m"
 EMPTY_ROW_PATTERN = re.compile(rf"^{EMPTY_CHARACTER}*({ANSI_COLOR_PATTERN})?{EMPTY_CHARACTER}*$")
@@ -13,12 +14,11 @@ EMPTY_ROW_PATTERN = re.compile(rf"^{EMPTY_CHARACTER}*({ANSI_COLOR_PATTERN})?{EMP
 class RGB:
     def __init__(self, red: int, green: int, blue: int):
         self.red, self.green, self.blue = red, green, blue
-        self.luminance = (min(self) + max(self)) / 2 / 0xff * 100  # percentage
         if max(self) > 0:
-            self.saturation = (max(self) - min(self)) / (max(self) + min(self)) * 100
+            self.saturation = (max(self) - min(self)) / (max(self) + min(self)) * 0xff
         else:
             self.saturation = 0.0
-        self.array = np.array([self.red, self.green, self.blue, self.saturation, self.luminance])
+        self.array = np.array([self.red, self.green, self.blue, self.saturation])
 
     def __iter__(self):
         return iter((self.red, self.green, self.blue))
@@ -26,16 +26,6 @@ class RGB:
     @property
     def hex(self) -> str:
         return "#{:02x}{:02x}{:02x}".format(self.red, self.green, self.blue)
-
-    def compare(self, other: np.ndarray):
-        """
-        `other` has to be of same format as self.array, i.e. a 1-dim array
-        with 5 values: red, green, blue, saturation, luminance.
-
-        The lower the result, the more similar the colours.
-        """
-        assert other.shape == (5,), f"Array has wrong shape: {other.shape}"
-        return np.absolute(np.subtract(self.array, other)).sum()
 
 
 class Color:
@@ -96,11 +86,17 @@ class ColorConverter:
                 if isinstance(attr, Color):
                     attr.name = attr_name
                     self.colors.append(attr)
+        self.color_matrix = np.array([c.source.array for c in self.colors])
 
+    @timer
     def from_array(self, array: np.ndarray) -> Color:
-        diffs = [(color, color.source.compare(array)) for color in self.colors]
-        most_likely = min(diffs, key=lambda d: d[1])[0]
-        return most_likely
+        """
+        For each colour, calculate the difference (as absolute numbers) of
+        each parameter with the ones in `array`, and sum these. Then return
+        the colour with the least difference.
+        """
+        diffs = np.absolute(np.subtract(self.color_matrix, array)).sum(axis=1)
+        return self.colors[np.argmin(diffs)]
 
 
 class ColorConverterInvertBW(ColorConverter):

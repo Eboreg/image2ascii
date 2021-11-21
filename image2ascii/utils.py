@@ -1,10 +1,40 @@
+import functools
 import re
+import time
 from pathlib import Path
+from typing import Dict, List, Tuple
 
 import requests
 from bs4 import BeautifulSoup
 
 from image2ascii import __version__
+
+timings: List[Tuple[str, float]] = []
+timing_enabled = False
+
+
+def timer(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        if not timing_enabled:
+            return func(*args, **kwargs)
+        start_time = time.monotonic()
+        ret = func(*args, **kwargs)
+        elapsed_time = time.monotonic() - start_time
+        timings.append((func.__qualname__, elapsed_time))
+        return ret
+    return wrapper
+
+
+def summarize_timing():
+    result: Dict[str, Tuple[int, float]] = {}
+    for funcname, timing in timings:
+        if funcname in result:
+            result[funcname] = (result[funcname][0] + 1, result[funcname][1] + timing)
+        else:
+            result[funcname] = (1, timing)
+    result_tuples = [(k, *v) for k, v in result.items()]
+    return sorted(result_tuples, key=lambda r: r[-1])
 
 
 def fetch_flags():

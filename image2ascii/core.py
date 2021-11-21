@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 
-import functools
-import time
-from typing import Dict, List, Optional, Tuple, Type
+from typing import List, Optional, Tuple, Type
 
 import numpy as np
 from PIL import Image, ImageEnhance, ImageOps
@@ -11,26 +9,14 @@ from werkzeug.datastructures import FileStorage
 from image2ascii import (
     DEFAULT_ASCII_RATIO, DEFAULT_ASCII_WIDTH, DEFAULT_MIN_LIKENESS, DEFAULT_QUALITY, EMPTY_CHARACTER, FILLED_CHARACTER,
 )
-from image2ascii.color import ColorConverter, ColorConverterInvertBW
-from image2ascii.geometry import BaseShape, CropBox, EmptyShape, FilledShape, PolygonShape, get_crop_box
+from image2ascii.color import Color, ColorConverter, ColorConverterInvertBW
+from image2ascii.geometry import BaseShape, CropBox, EmptyShape, FilledShape, PolygonShape
 from image2ascii.output import ANSIFormatter, BaseFormatter, HTMLFormatter, Output
+from image2ascii.utils import timer
 
 # Mnemonics for colour array indices
-# (red, green, blue, alpha, saturation, luminance, visible):
-R, G, B, A, S, L, V = 0, 1, 2, 3, 4, 5, 6
-
-
-def timer(func):
-    @functools.wraps(func)
-    def wrapper(self, *args, **kwargs):
-        if not self.debug:
-            return func(self, *args, **kwargs)
-        start_time = time.monotonic()
-        ret = func(self, *args, **kwargs)
-        elapsed_time = time.monotonic() - start_time
-        self.timing.append((func.__name__, elapsed_time))
-        return ret
-    return wrapper
+# (red, green, blue, alpha, saturation, visible)
+R, G, B, A, S, V = 0, 1, 2, 3, 4, 5
 
 
 class Image2ASCII:
@@ -56,11 +42,11 @@ class Image2ASCII:
 
     debug: bool
     shapes: List[BaseShape]
-    timing: List
+    # timing: List
 
     def __init__(self, file=None, debug: bool = False):
         self.debug = debug
-        self.timing = []
+        # self.timing = []
         if file is not None:
             self.load(file)
 
@@ -277,15 +263,19 @@ class Image2ASCII:
     THE REST OF THE JAZZ
     """
     @timer
-    def do_crop(self, image: Image.Image) -> Image.Image:
-        image = self.do_resize(image)
+    def do_crop(self, image: Image.Image, matrix: np.ndarray) -> Tuple[Image.Image, bool]:
+        """
+        `image` does not necessarily have the same dimensions as `matrix`, so
+        we transpose the cropbox before doing the actual cropping.
+        """
         if self.crop:
-            matrix = self.get_matrix(image)
-            # Expecting the last value to be a "white" boolean
-            boolmatrix = matrix[:, :, -1]
-            cropbox = get_crop_box(boolmatrix)
-            image = image.crop(cropbox)
-        return image
+            ratio = image.height / matrix.shape[0]
+            cropbox = self.get_crop_box(matrix)
+            if cropbox != CropBox(0, 0, image.width, image.height):
+                cropbox = CropBox(*[round(v * ratio) for v in cropbox])
+                image = image.crop(cropbox)
+                return image, True
+        return image, False
 
     @timer
     def do_enhance(self, image: Image.Image) -> Image.Image:
@@ -319,8 +309,15 @@ class Image2ASCII:
         """
         end_width = self.ascii_width * self.quality
 
+        if image.width < end_width:
+            # Upsize to the nearest multiple of self.ascii_width
+            if not image.width % self.quality:
+                end_width = image.width
+            else:
+                end_width = image.width + self.quality - image.width % self.quality
+
         if image.width != end_width:
-            image = image.resize((end_width, round((end_width / image.width) * image.height)))
+            image = image.resize((end_width, round((end_width / image.width) * image.height)), resample=Image.NEAREST)
 
         # Each character will represent an image section this large
         section_width = int(image.width / self.ascii_width) or 1
@@ -340,10 +337,6 @@ class Image2ASCII:
 
         return image
 
-    def get_section_size(self, image: Image.Image) -> Tuple[int, int]:
-        section_width = int(image.width / self.ascii_width) or 1
-        return section_width, int(section_width * self.ascii_ratio) or 1
-
     @timer
     def get_char(self, nonzero_coords: List[Tuple[int, int]]) -> str:
         chars = []  # list of (char, likeness) tuples
@@ -354,6 +347,28 @@ class Image2ASCII:
                 return shape.char
             chars.append((shape.char, likeness))
         return max(chars, key=lambda c: c[1])[0]
+
+    @timer
+    def get_crop_box(self, matrix: np.ndarray) -> CropBox:
+        height, width, _ = matrix.shape
+
+        for left in range(width):
+            if matrix[:, left, V].any():
+                break
+
+        for upper in range(height):
+            if matrix[upper, :, V].any():
+                break
+
+        for right in range(width, left, -1):
+            if matrix[:, right - 1, V].any():
+                break
+
+        for lower in range(height, upper, -1):
+            if matrix[lower - 1, :, V].any():
+                break
+
+        return CropBox(left, upper, right, lower)
 
     @timer
     def get_matrix(self, image: Image.Image):
@@ -371,45 +386,56 @@ class Image2ASCII:
 
         assert image.mode == "RGBA", "Image mode must be RGBA"
 
-        arr = np.empty((image.width * image.height, 7), dtype=np.uint8)
+        arr = np.empty((image.width * image.height, 6), dtype=np.uint8)
 
         # Fill first 4 values with R, G, B, A
         arr[:, :A + 1] = np.array(image.getdata())
 
-        # Array of (min colour value, max colour value) for each RGB colour,
-        # converted to percentages. 100 % of course represents 255.
+        # Array of (min(R, G, B), max(R, G, B)) for each pixel in image.
         minmax = np.empty((image.width * image.height, 2))
-        minmax[:, MIN] = arr[:, :B + 1].min(axis=1) / 0xff * 100
-        minmax[:, MAX] = arr[:, :B + 1].max(axis=1) / 0xff * 100
+        minmax[:, MIN] = arr[:, :B + 1].min(axis=1)
+        minmax[:, MAX] = arr[:, :B + 1].max(axis=1)
 
-        # Luminance = (min + max) / 2, also percentage
-        arr[:, L] = minmax.mean(axis=1)
-
-        # Saturation = (max - min) / (max + min), converted to percent
+        # Saturation = (max - min) / (max + min), on scale 0 - 0xff
         arr[:, S] = np.divide(
             minmax[:, MAX] - minmax[:, MIN], minmax[:, MAX] + minmax[:, MIN],
             out=np.zeros((image.width * image.height,)),
             where=minmax[:, MAX] > 0  # avoid division by zero
-        ) * 100
+        ) * 0xff
 
-        # Now to find the W (white) values:
+        # Now to find the V (visibility) values:
         if self.fill_all:
-            # Pos W becomes 0 if pos A < 0x80, 1 otherwise
+            # All chars are visible except transparent (A < 0x80) ones:
             arr[:, V] = arr[:, A] >= 0x80
         else:
-            # Calculate W values according to algorithm below, but alpha
-            # takes precedence (if A < 0x80, W is 0).
+            # Calculate perceived brightness per algorithm:
             # https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image.convert
-            arr[:, V] = np.all((
-                arr[:, A] >= 0x80,
-                arr[:, R] * 0.299 + arr[:, G] * 0.587 + arr[:, B] * 0.114 >= 0x80
-            ), axis=0)
+            perceived_brightness = arr[:, R] * 0.299 + arr[:, G] * 0.587 + arr[:, B] * 0.114
 
-        if self.invert:
-            arr[:, V] = arr[:, V] == 0
+            # Transparency (A < 0x80) still takes precedence:
+            if not self.invert:
+                arr[:, V] = np.all((arr[:, A] >= 0x80, perceived_brightness >= 0x80), axis=0)
+            else:
+                # If self.invert, make chars visible that have a perceived
+                # brightness _less_ than 0x80:
+                arr[:, V] = np.all((arr[:, A] >= 0x80, perceived_brightness < 0x80), axis=0)
 
         # Reshape to image.height rows and image.width columns
-        return arr.reshape(image.height, image.width, 7)
+        return arr.reshape(image.height, image.width, 6)
+
+    @timer
+    def get_section_color(self, section: np.ndarray, converter: ColorConverter) -> Optional[Color]:
+        # Generate a 2-d array of colour data for points where V > 0:
+        colors = section[section[:, :, V] > 0]
+        if colors.size:
+            # Get median value and reduce it to array of R, G, B, S values:
+            color_arr = np.median(colors, axis=0)[np.array([R, G, B, S])]
+            return converter.from_array(color_arr)
+        return None
+
+    def get_section_size(self, image: Image.Image) -> Tuple[int, int]:
+        section_width = int(image.width / self.ascii_width) or 1
+        return section_width, int(section_width * self.ascii_ratio) or 1
 
     @timer
     def init_shapes(self, section_width: int, section_height: int):
@@ -459,19 +485,41 @@ class Image2ASCII:
         return self
 
     @timer
-    def prepare_image(self) -> Tuple[int, int, Image.Image]:
+    def prepare_image(self) -> Tuple[Image.Image, np.ndarray]:
         """
-        Returns: section_width, section_height, prepared image
+        There is a logic to the order of execution here; first of all, we need
+        a get_matrix() in order to do_crop(). That matrix has to be generated
+        from an image of a reasonable size, otherwise it would take an
+        inordinate amount of time. However, we also want to do_crop() on a
+        non-resized image, lest the resulting image becomes unnecessarily
+        small, and hence the output quality is less than expected.
+
+        Also, if any cropping was done, we need to do_resize() once again,
+        since the cropping probably made the image dimensions unsuitable (i.e.
+        height and/or width not being a multiple of self.quality).
+
+        The actual cropping and resizing takes a miniscule amount of time,
+        though, so it's not a real problem.
         """
         if self.image is None:
             raise ValueError("You need to run .load(file)")
-        image = self.do_enhance(self.image)
+
+        image = self.image.copy()
+
+        image = self.do_enhance(image)
         image = self.do_invert(image)
-        image = self.do_crop(image)
-        image = self.do_resize(image)
-        section_width, section_height = self.get_section_size(image)
-        self.init_shapes(section_width, section_height)
-        return section_width, section_height, image
+
+        resized_image = self.do_resize(image)
+        matrix = self.get_matrix(resized_image)
+
+        image, cropped = self.do_crop(image, matrix)
+        if cropped:
+            image = self.do_resize(image)
+            matrix = self.get_matrix(image)
+        else:
+            image = resized_image
+
+        return image, matrix
 
     @timer
     def render(self):
@@ -483,9 +531,10 @@ class Image2ASCII:
         in the selected format.
         """
         if self.output is None:
-            section_width, section_height, image = self.prepare_image()
+            image, matrix = self.prepare_image()
+            section_width, section_height = self.get_section_size(image)
+            self.init_shapes(section_width, section_height)
             self.output = Output()
-            matrix = self.get_matrix(image)
 
             if self.color:
                 last_color = None
@@ -495,37 +544,21 @@ class Image2ASCII:
                 for start_x in range(0, image.width, section_width):
                     section = matrix[start_y:start_y + section_height, start_x:start_x + section_width]
                     if self.color:
-                        # Create a 2-d array of points:
-                        points = section.reshape(section_width * section_height, section.shape[-1])
-                        # Filter for points where visibility is 1:
-                        section_colors = points[points[:, V] > 0]
-                        if section_colors.size:
-                            # Get median value and reduce it to array of
-                            # R, G, B, S, L values:
-                            color_value = np.median(section_colors, axis=0)[np.array([R, G, B, S, L])]
-                            new_color = color_converter.from_array(color_value)
-                            if new_color != last_color:
-                                self.output.add_color(new_color)
-                                last_color = new_color
+                        new_color = self.get_section_color(section, color_converter)
+                        if new_color is not None and new_color != last_color:
+                            self.output.add_color(new_color)
+                            last_color = new_color
                     nonzero = np.nonzero(section[:, :, -1])
-                    if nonzero[0].size:
+                    if not nonzero[0].size:
+                        # Micro-optimization
+                        char = EMPTY_CHARACTER
+                    else:
                         # 1-indexed (x, y) coordinates of filled points:
                         nonzero_coords = list(zip(nonzero[1] + 1, nonzero[0] + 1))
                         char = self.get_char(nonzero_coords)
-                    else:
-                        char = EMPTY_CHARACTER
                     self.output.add_text(char)
                 self.output.add_br()
         return self.formatter_class(self.output).render()
 
     def reset(self):
         self.output = None
-
-    def summarize_timing(self):
-        result: Dict[str, Tuple[int, float]] = {}
-        for funcname, timing in self.timing:
-            if funcname in result:
-                result[funcname] = (result[funcname][0] + 1, result[funcname][1] + timing)
-            else:
-                result[funcname] = (1, timing)
-        return result

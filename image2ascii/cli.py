@@ -7,7 +7,9 @@ from wsgiref.simple_server import make_server
 import colorama
 from colorama import Fore
 
-from image2ascii import DEFAULT_ASCII_RATIO, DEFAULT_ASCII_WIDTH, DEFAULT_MIN_LIKENESS, DEFAULT_QUALITY, __version__
+from image2ascii import (
+    DEFAULT_ASCII_RATIO, DEFAULT_ASCII_WIDTH, DEFAULT_MIN_LIKENESS, DEFAULT_QUALITY, __version__, utils,
+)
 from image2ascii.core import Image2ASCII
 from image2ascii.output import ANSIFormatter
 from image2ascii.wsgi import Application
@@ -123,7 +125,9 @@ def main():
         parser.print_help()
         return
 
-    start_time = time.monotonic()
+    if args.debug:
+        utils.timing_enabled = True
+        start_time = time.monotonic()
 
     i2a = Image2ASCII(file=args.file, debug=args.debug)
 
@@ -142,13 +146,17 @@ def main():
 
     output = i2a.render()
 
-    elapsed_time = time.monotonic() - start_time
+    if args.debug:
+        elapsed_time = time.monotonic() - start_time
 
     print(output)
 
     if args.debug:
-        for funcname, timing in i2a.summarize_timing().items():
-            print(f"{funcname}: {timing[0]} executions, {round(timing[1], 10)} s")
+        for funcname, executions, timing in utils.summarize_timing():
+            print(
+                f"{funcname}\t{executions} executions\ttotal={round(timing, 10)} "
+                f"s\taverage={round(timing / executions, 10)} s"
+            )
         print(f"Total time: {round(elapsed_time, 10)} s")
 
 

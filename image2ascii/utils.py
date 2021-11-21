@@ -4,9 +4,6 @@ import time
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-import requests
-from bs4 import BeautifulSoup
-
 from image2ascii import __version__
 
 timings: List[Tuple[str, float]] = []
@@ -38,6 +35,9 @@ def summarize_timing():
 
 
 def fetch_flags():
+    import requests
+    from bs4 import BeautifulSoup
+
     flag_dir = Path(__file__).parent / "flags"
     user_agent = f"image2ascii/{__version__} (https://github.com/Eboreg/image2ascii)"
     headers = {"User-Agent": user_agent}

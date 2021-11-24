@@ -1,13 +1,15 @@
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple, Type
 
-from image2ascii.color import Color
+import numpy as np
+
+from image2ascii.color import ANSIColorConverter, BaseColorConverter, HTMLFullRGBColorConverter
 from image2ascii.utils import timer
 
 
 class Output:
     format: str
     rows: List[str]
-    colors: Dict[Tuple[int, int], Color]  # {(x, y): color}
+    colors: Dict[Tuple[int, int], np.ndarray]  # {(x, y): color}
 
     def __init__(self):
         self.rows = []
@@ -29,63 +31,66 @@ class Output:
         self.col_ptr = 0
 
     @timer
-    def add_color(self, color: Color):
+    def add_color(self, color: np.ndarray):
         self.colors[(self.col_ptr, self.row_ptr)] = color
 
 
 class BaseFormatter:
     name: str
     br = "\n"
+    color_converter: BaseColorConverter
+    color_converter_class: Type[BaseColorConverter]
 
-    def __init__(self, output: Output):
-        self.output = output
+    def __init__(self, color_converter_class: Optional[Type[BaseColorConverter]] = None):
+        if color_converter_class is not None:
+            self.color_converter_class = color_converter_class
+        self.color_converter = self.color_converter_class()
 
     @timer
-    def render(self) -> str:
-        output = ""
-        for row_idx, row in enumerate(self.output.rows):
+    def render(self, output: Output) -> str:
+        ret = ""
+
+        for row_idx, row in enumerate(output.rows):
             if row_idx > 0:
-                output += self.br
+                ret += self.br
             for col_idx, char in enumerate(row):
-                if (col_idx, row_idx) in self.output.colors:
-                    output += self.render_color(self.output.colors[(col_idx, row_idx)])
-                output += char
-        return output
+                if (col_idx, row_idx) in output.colors:
+                    ret += self.render_color(output.colors[(col_idx, row_idx)])
+                ret += char
+        return ret
 
     @timer
-    def render_color(self, color: Color) -> str:
-        return ""
+    def render_color(self, color: np.ndarray) -> str:
+        return self.color_converter.to_representation(color)
 
 
 class ANSIFormatter(BaseFormatter):
     name = "ansi"
-
-    @timer
-    def render_color(self, color: Color):
-        return color.ansi
+    color_converter_class = ANSIColorConverter
 
 
 class HTMLFormatter(BaseFormatter):
     name = "html"
     br = "<br>"
     open_span = False
+    color_converter_class = HTMLFullRGBColorConverter
 
     @timer
-    def render(self):
+    def render(self, output: Output) -> str:
         self.open_span = False
-        output = "<pre>"
-        output += super().render()
+        ret = "<pre>"
+        ret += super().render(output)
         if self.open_span:
-            output += "</span>"
+            ret += "</span>"
             self.open_span = False
-        output += "</pre>"
-        return output
+        ret += "</pre>"
+        return ret
 
     @timer
-    def render_color(self, color: Color):
+    def render_color(self, color: np.ndarray) -> str:
         output = ""
         if self.open_span:
             output += "</span>"
-        output += f"<span style=\"color:{color.hex}\">"
+        output += f"<span style=\"color:{self.color_converter.to_representation(color)}\">"
         self.open_span = True
         return output

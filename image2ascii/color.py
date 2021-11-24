@@ -1,31 +1,75 @@
-import re
-from typing import List, Optional
+from typing import Optional
 
 import numpy as np
-from colorama import Fore, ansi
+from colorama import Fore
 
-from image2ascii import EMPTY_CHARACTER
 from image2ascii.utils import timer
 
-ANSI_COLOR_PATTERN = re.escape(ansi.CSI) + r"\d+m"
-EMPTY_ROW_PATTERN = re.compile(rf"^{EMPTY_CHARACTER}*({ANSI_COLOR_PATTERN})?{EMPTY_CHARACTER}*$")
+R, G, B = range(3)
+
+
+@timer
+def rgb_to_hsv(rgb: np.ndarray) -> np.ndarray:
+    """
+    :param rgb: An N-d array, where the innermost one has exactly 3 positions
+        (R, G, B).
+    :returns: Array with the same shape as `rgb`, but populated with H, S, V
+        values.
+    """
+    axis = len(rgb.shape) - 1
+
+    # Shift the RGB values in each row to put the highest one first, then tack
+    # on the peak-to-peak (max - min) value last for efficiency:
+    rgbc = np.stack([
+        rgb.max(axis=axis),
+        np.take_along_axis(rgb, np.expand_dims((rgb.argmax(axis=axis) + 1) % 3, axis=axis), axis=axis).squeeze(),
+        np.take_along_axis(rgb, np.expand_dims((rgb.argmax(axis=axis) + 2) % 3, axis=axis), axis=axis).squeeze(),
+        rgb.ptp(axis=axis)
+    ], axis=axis)
+
+    # HSV values are computed with simplified versions of the methods here:
+    # https://math.stackexchange.com/questions/556341/rgb-to-hsv-color-conversion-algorithm
+
+    # More precisely: For hue, we take advantage of the fact that we, instead
+    # of "manually" checking which colour has the highest value ("0 if M = r"
+    # etc), can just multiply its position in the original RGB array by 2 to
+    # get the first term of h'. Thanks to this, and to having shifted the RGB
+    # values above, we don't need to do change the algorithm depending on
+    # which RGB value is the largest ("B - G if M = r" etc).
+
+    # We also simplify parts of the h' calculation; e.g., "(M-b)/c - (M-g)/c"
+    # becomes "(g-b)/c". I am bad at math, so shouts out to this excellent
+    # tool: https://www.symbolab.com/solver/simplify-calculator
+    return np.stack([
+        # Hue:
+        (
+            rgb.argmax(axis=axis) * 2 +
+            np.divide(
+                rgbc.take(1, axis=axis) - rgbc.take(2, axis=axis),
+                rgbc.take(3, axis=axis),
+                where=rgbc.take(3, axis=axis) > 0,
+                out=np.zeros((*rgb.shape[:-1],))
+            )
+        ) / 6 % 1 * 360,
+        # Saturation:
+        np.divide(
+            rgbc.take(3, axis=axis),
+            rgbc.take(0, axis=axis),
+            where=rgbc.take(0, axis=axis) > 0,
+            out=np.zeros((*rgb.shape[:-1],))
+        ) * 100,
+        # Value:
+        rgbc.take(0, axis=axis) / 0xff * 100
+    ], axis=axis)
+
+
+def to_css(arr: np.ndarray) -> str:
+    return "#{:02x}{:02x}{:02x}".format(arr[R].astype(np.uint8), arr[G].astype(np.uint8), arr[B].astype(np.uint8))
 
 
 class RGB:
     def __init__(self, red: int, green: int, blue: int):
-        self.red, self.green, self.blue = red, green, blue
-        if max(self) > 0:
-            self.saturation = (max(self) - min(self)) / (max(self) + min(self)) * 0xff
-        else:
-            self.saturation = 0.0
-        self.array = np.array([self.red, self.green, self.blue, self.saturation])
-
-    def __iter__(self):
-        return iter((self.red, self.green, self.blue))
-
-    @property
-    def hex(self) -> str:
-        return "#{:02x}{:02x}{:02x}".format(self.red, self.green, self.blue)
+        self.array = np.array([red, green, blue], dtype=np.uint64)
 
 
 class Color:
@@ -35,18 +79,16 @@ class Color:
     """
     name: Optional[str]
 
-    def __init__(self, source: RGB, ansi: str, rgb: Optional[RGB] = None):
+    def __init__(self, source: RGB, ansi: str):
         """
         :param source: The colour we compare each incoming colour to, i.e.
             if the incoming colour is closer to this colour than to any other,
             this object will be chosen.
         :param ansi: The ANSI code used to render this colour.
-        :param rgb: RGB value used to render this colour. Is generally the
-            same as `source`, and in that case, it could be omitted.
         """
         self.source = source
         self.ansi = ansi
-        self.rgb = rgb or source
+        self.css = to_css(source.array)
         self.name = None
 
     def __repr__(self):
@@ -54,54 +96,82 @@ class Color:
             return self.name
         return super().__repr__()
 
-    @property
-    def hex(self) -> str:
-        return self.rgb.hex
+
+BLACK = Color(source=RGB(0x00, 0x00, 0x00), ansi=Fore.BLACK)
+BLUE = Color(source=RGB(0x00, 0x00, 0xaa), ansi=Fore.BLUE)
+GREEN = Color(source=RGB(0x00, 0xaa, 0x00), ansi=Fore.GREEN)
+CYAN = Color(source=RGB(0x00, 0xaa, 0xaa), ansi=Fore.CYAN)
+RED = Color(source=RGB(0xaa, 0x00, 0x00), ansi=Fore.RED)
+PURPLE = Color(source=RGB(0xaa, 0x00, 0xaa), ansi=Fore.MAGENTA)
+BROWN = Color(source=RGB(0xaa, 0x55, 0x00), ansi=Fore.YELLOW)
+LIGHTGRAY = Color(source=RGB(0xaa, 0xaa, 0xaa), ansi=Fore.WHITE)
+
+YELLOW = Color(source=RGB(0xff, 0xff, 0x55), ansi=Fore.LIGHTYELLOW_EX)
+DARKGRAY = Color(source=RGB(0x55, 0x55, 0x55), ansi=Fore.LIGHTBLACK_EX)
+LIGHTBLUE = Color(source=RGB(0x55, 0x55, 0xff), ansi=Fore.LIGHTBLUE_EX)
+LIGHTGREEN = Color(source=RGB(0x55, 0xff, 0x55), ansi=Fore.LIGHTGREEN_EX)
+LIGHTCYAN = Color(source=RGB(0x55, 0xff, 0xff), ansi=Fore.LIGHTCYAN_EX)
+LIGHTRED = Color(source=RGB(0xff, 0x55, 0x55), ansi=Fore.LIGHTRED_EX)
+LIGHTPURPLE = Color(source=RGB(0xff, 0x55, 0xff), ansi=Fore.LIGHTMAGENTA_EX)
+WHITE = Color(source=RGB(0xff, 0xff, 0xff), ansi=Fore.LIGHTWHITE_EX)
 
 
-class ColorConverter:
-    BLACK = Color(RGB(0x00, 0x00, 0x00), Fore.BLACK)
-    BLUE = Color(RGB(0x00, 0x00, 0x80), Fore.BLUE)
-    GREEN = Color(RGB(0x00, 0x80, 0x00), Fore.GREEN)
-    CYAN = Color(RGB(0x00, 0x80, 0x80), Fore.CYAN)
-    RED = Color(RGB(0x80, 0x00, 0x00), Fore.RED)
-    MAGENTA = Color(RGB(0x80, 0x00, 0x80), Fore.MAGENTA)
-    YELLOW = Color(RGB(0x80, 0x80, 0x00), Fore.YELLOW)
-    WHITE = Color(RGB(0xc0, 0xc0, 0xc0), Fore.WHITE)
+class BaseColorConverter:
+    def closest(self, hsv: np.ndarray) -> np.ndarray:
+        raise NotImplementedError
 
-    LIGHTBLACK = Color(RGB(0x40, 0x40, 0x40), Fore.LIGHTBLACK_EX)
-    LIGHTBLUE = Color(RGB(0x00, 0x00, 0xff), Fore.LIGHTBLUE_EX)
-    LIGHTGREEN = Color(RGB(0x00, 0xff, 0x00), Fore.LIGHTGREEN_EX)
-    LIGHTCYAN = Color(RGB(0x00, 0xff, 0xff), Fore.LIGHTCYAN_EX)
-    LIGHTRED = Color(RGB(0xff, 0x00, 0x00), Fore.LIGHTRED_EX)
-    LIGHTMAGENTA = Color(RGB(0xff, 0x00, 0xff), Fore.LIGHTMAGENTA_EX)
-    LIGHTYELLOW = Color(RGB(0xff, 0xff, 0x00), Fore.LIGHTYELLOW_EX)
-    LIGHTWHITE = Color(RGB(0xff, 0xff, 0xff), Fore.LIGHTWHITE_EX)
+    def to_representation(self, array: np.ndarray) -> str:
+        raise NotImplementedError
 
+
+class ANSIColorConverter(BaseColorConverter):
     def __init__(self):
-        self.colors: List[Color] = []
-        for attr_name in self.__dir__():
-            if not attr_name.startswith("_"):
-                attr = getattr(self, attr_name)
-                if isinstance(attr, Color):
-                    attr.name = attr_name
-                    self.colors.append(attr)
+        self.colors = [
+            BLACK, BLUE, GREEN, CYAN, RED, PURPLE, BROWN, LIGHTGRAY,
+            YELLOW, DARKGRAY, LIGHTBLUE, LIGHTGREEN, LIGHTCYAN, LIGHTRED,
+            LIGHTPURPLE, WHITE
+        ]
         self.color_matrix = np.array([c.source.array for c in self.colors])
 
     @timer
-    def from_array(self, array: np.ndarray) -> Color:
+    def closest(self, color: np.ndarray) -> np.ndarray:
         """
         For each colour, calculate the difference (as absolute numbers) of
         each parameter with the ones in `array`, and sum these. Then return
         the colour with the least difference.
+
+        Algorithm from:
+        https://stackoverflow.com/questions/9018016/how-to-compare-two-colors-for-similarity-difference/9085524#9085524
         """
-        diffs = np.absolute(np.subtract(self.color_matrix, array)).sum(axis=1)
-        return self.colors[np.argmin(diffs)]
+        rmean = (self.color_matrix[:, R] + color[R]) // 2
+
+        distances = np.sqrt(
+            ((512 + rmean) * np.power(self.color_matrix[:, R] - color[R], 2) >> 8) +
+            4 * np.power(self.color_matrix[:, G] - color[G], 2) +
+            ((767 - rmean) * np.power(self.color_matrix[:, B] - color[B], 2) >> 8)
+        )
+
+        return self.colors[np.argmin(distances)].source.array
+
+    @timer
+    def to_representation(self, array: np.ndarray) -> str:
+        for color in self.colors:
+            if np.all(color.source.array == array):
+                return color.ansi
+        raise ValueError(f"Colour with values {array} not registered")
 
 
-class ColorConverterInvertBW(ColorConverter):
-    """Black is rendered as white and vice versa"""
-    BLACK = Color(RGB(0xff, 0xff, 0xff), Fore.BLACK, RGB(0x00, 0x00, 0x00))
-    WHITE = Color(RGB(0x40, 0x40, 0x40), Fore.WHITE, RGB(0xc0, 0xc0, 0xc0))
-    LIGHTBLACK = Color(RGB(0xc0, 0xc0, 0xc0), Fore.LIGHTBLACK_EX, RGB(0x40, 0x40, 0x40))
-    LIGHTWHITE = Color(RGB(0x00, 0x00, 0x00), Fore.LIGHTWHITE_EX, RGB(0xff, 0xff, 0xff))
+class HTMLANSIColorConverter(ANSIColorConverter):
+    def to_representation(self, array: np.ndarray) -> str:
+        for color in self.colors:
+            if np.all(color.source.array == array):
+                return color.css
+        raise ValueError(f"Colour with values {array} not registered")
+
+
+class HTMLFullRGBColorConverter(BaseColorConverter):
+    def closest(self, array: np.ndarray) -> np.ndarray:
+        return array
+
+    def to_representation(self, array: np.ndarray) -> str:
+        return to_css(array)

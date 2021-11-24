@@ -100,11 +100,6 @@ def main():
         help="Inverts the colours (yes, I use British spelling in text and American in code; deal with it) " +
              "of the image before processing."
     )
-    parser.add_argument(
-        "--swap-bw",
-        action="store_true",
-        help="Makes black output characters white and vice versa; does not affect any other colours."
-    )
     parser.add_argument("--test-server", action="store_true", help="Fires up a test server on port 8000.")
     parser.add_argument(
         "--debug",
@@ -129,14 +124,13 @@ def main():
         utils.timing_enabled = True
         start_time = time.monotonic()
 
-    i2a = Image2ASCII(file=args.file, debug=args.debug)
+    i2a = Image2ASCII(file=args.file)
 
     i2a.color_settings(
         color=args.color,
         invert=args.invert,
         invert_colors=args.invert_colors,
         fill_all=args.fill_all,
-        swap_bw=args.swap_bw
     )
     i2a.enhancement_settings(contrast=args.contrast, brightness=args.brightness, color_balance=args.color_balance)
     i2a.quality_settings(quality=args.quality, min_likeness=args.min_likeness)
@@ -153,10 +147,13 @@ def main():
 
     if args.debug:
         for funcname, executions, timing in utils.summarize_timing():
-            print(
-                f"{funcname}\t{executions} executions\ttotal={round(timing, 10)} "
-                f"s\taverage={round(timing / executions, 10)} s"
-            )
+            print("{:40} {:20} {:30} {}".format(
+                funcname,
+                f"{executions} executions",
+                f"average={round(timing / executions, 10)} s",
+                f"total={round(timing, 10)} s",
+            ))
+        print()
         print(f"Total time: {round(elapsed_time, 10)} s")
 
 

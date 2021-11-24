@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 from jinja2 import Environment, PackageLoader
 from werkzeug.wrappers import Request, Response
 
+from image2ascii.color import HTMLANSIColorConverter, HTMLFullRGBColorConverter
 from image2ascii.core import Image2ASCII
 from image2ascii.db import Session, ShelfDB
 from image2ascii.output import HTMLFormatter
@@ -38,14 +39,15 @@ class Application:
             color_balance=1.0,
             flags=self.get_flags(),
         )
+
         if request.method == "POST":
             context.update(
                 color="color" in request.form,
                 invert="invert" in request.form,
                 crop="crop" in request.form,
                 invert_colors="invert-colors" in request.form,
-                swap_bw="swap-bw" in request.form,
                 fill_all="fill-all" in request.form,
+                full_rgb="full-rgb" in request.form,
                 contrast=request.form.get("contrast", 1),
                 brightness=request.form.get("brightness", 1),
                 color_balance=request.form.get("color-balance", 1),
@@ -61,14 +63,15 @@ class Application:
                 )
             except Exception as e:
                 context.update(output=str(e))
+
         else:
             context.update(
                 color=True,
                 invert=False,
                 crop=True,
                 invert_colors=False,
-                swap_bw=False,
                 fill_all=False,
+                full_rgb=True,
             )
             if session.i2a:
                 context.update(
@@ -78,12 +81,13 @@ class Application:
                     invert=session.i2a.invert,
                     crop=session.i2a.crop,
                     invert_colors=session.i2a.invert_colors,
-                    swap_bw=session.i2a.swap_bw,
                     fill_all=session.i2a.fill_all,
+                    full_rgb=session.i2a.color_converter_class is not HTMLANSIColorConverter,
                     contrast=session.i2a.contrast,
                     brightness=session.i2a.brightness,
                     color_balance=session.i2a.color_balance,
                 )
+
         return context
 
     def get_flags(self):
@@ -126,18 +130,25 @@ class Application:
             i2a.load(self.flag_dir / flag)
 
         i2a.formatter_class = HTMLFormatter
+
+        if "full-rgb" in request.form:
+            i2a.color_converter_class = HTMLFullRGBColorConverter
+        else:
+            i2a.color_converter_class = HTMLANSIColorConverter
+
         i2a.color_settings(
             color="color" in request.form,
             invert="invert" in request.form,
             invert_colors="invert-colors" in request.form,
             fill_all="fill-all" in request.form,
-            swap_bw="swap-bw" in request.form
         )
+
         i2a.enhancement_settings(
             contrast=float(request.form["contrast"]),
             brightness=float(request.form["brightness"]),
             color_balance=float(request.form["color-balance"]),
         )
+
         i2a.size_settings(crop="crop" in request.form)
 
         return i2a

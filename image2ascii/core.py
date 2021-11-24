@@ -9,14 +9,15 @@ from werkzeug.datastructures import FileStorage
 from image2ascii import (
     DEFAULT_ASCII_RATIO, DEFAULT_ASCII_WIDTH, DEFAULT_MIN_LIKENESS, DEFAULT_QUALITY, EMPTY_CHARACTER, FILLED_CHARACTER,
 )
-from image2ascii.color import Color, ColorConverter, ColorConverterInvertBW
+from image2ascii.color import BaseColorConverter
 from image2ascii.geometry import BaseShape, CropBox, EmptyShape, FilledShape, PolygonShape
-from image2ascii.output import ANSIFormatter, BaseFormatter, HTMLFormatter, Output
+from image2ascii.output import ANSIFormatter, BaseFormatter, Output
 from image2ascii.utils import timer
 
 # Mnemonics for colour array indices
-# (red, green, blue, alpha, saturation, visible)
-R, G, B, A, S, V = 0, 1, 2, 3, 4, 5
+# (red, green, blue, alpha, visibility, hue, saturation, value)
+# H, S, and Va are currently not used, though.
+R, G, B, A, Vi, H, S, Va = range(8)
 
 
 class Image2ASCII:
@@ -25,30 +26,34 @@ class Image2ASCII:
     _brightness: float = 1.0
     _color: bool = False
     _color_balance: float = 1.0
-    _color_converter_class: Type[ColorConverter] = ColorConverter
+    _color_converter_class: Optional[Type[BaseColorConverter]] = None
     _contrast: float = 1.0
     _crop: bool = False
     _fill_all: bool = False
+    _formatter_class: Type[BaseFormatter] = ANSIFormatter
     _invert: bool = False
     _invert_colors: bool = False
     _min_likeness: float = DEFAULT_MIN_LIKENESS
     _quality: int = DEFAULT_QUALITY
-    _swap_bw: bool = False
 
     filename: Optional[str] = None
-    formatter_class: Type[BaseFormatter] = ANSIFormatter
     image: Optional[Image.Image] = None
     output: Optional[Output] = None
 
-    debug: bool
     shapes: List[BaseShape]
-    # timing: List
 
-    def __init__(self, file=None, debug: bool = False):
-        self.debug = debug
-        # self.timing = []
+    def __init__(
+        self,
+        file=None,
+        formatter_class: Optional[Type[BaseFormatter]] = None,
+        color_converter_class: Optional[Type[BaseColorConverter]] = None,
+    ):
         if file is not None:
             self.load(file)
+        if formatter_class is not None:
+            self.formatter_class = formatter_class
+        if color_converter_class is not None:
+            self.color_converter_class = color_converter_class
 
     """
     PROPERTIES
@@ -104,11 +109,11 @@ class Image2ASCII:
             self.reset()
 
     @property
-    def color_converter_class(self) -> Type[ColorConverter]:
+    def color_converter_class(self) -> Optional[Type[BaseColorConverter]]:
         return self._color_converter_class
 
     @color_converter_class.setter
-    def color_converter_class(self, value: Type[ColorConverter]):
+    def color_converter_class(self, value: Type[BaseColorConverter]):
         if value != self._color_converter_class:
             self._color_converter_class = value
             self.reset()
@@ -141,6 +146,16 @@ class Image2ASCII:
     def fill_all(self, value: bool):
         if value != self._fill_all:
             self._fill_all = value
+            self.reset()
+
+    @property
+    def formatter_class(self) -> Type[BaseFormatter]:
+        return self._formatter_class
+
+    @formatter_class.setter
+    def formatter_class(self, value: Type[BaseFormatter]):
+        if value != self._formatter_class:
+            self._formatter_class = value
             self.reset()
 
     @property
@@ -183,17 +198,6 @@ class Image2ASCII:
             self._quality = value
             self.reset()
 
-    @property
-    def swap_bw(self) -> bool:
-        return self._swap_bw
-
-    @swap_bw.setter
-    def swap_bw(self, value: bool):
-        if value != self._swap_bw:
-            self._swap_bw = value
-            self.color_converter_class = ColorConverterInvertBW if value else ColorConverter
-            self.reset()
-
     """
     CONVENIENCE SETTINGS METHODS
     """
@@ -203,7 +207,6 @@ class Image2ASCII:
         invert: Optional[bool] = None,
         invert_colors: Optional[bool] = None,
         fill_all: Optional[bool] = None,
-        swap_bw: Optional[bool] = None
     ):
         if color is not None:
             self.color = color
@@ -213,8 +216,6 @@ class Image2ASCII:
             self.invert_colors = invert_colors
         if fill_all is not None:
             self.fill_all = fill_all
-        if swap_bw is not None:
-            self.swap_bw = swap_bw
         return self
 
     def enhancement_settings(
@@ -250,13 +251,6 @@ class Image2ASCII:
             self.ascii_ratio = ascii_ratio
         if crop is not None:
             self.crop = crop
-        return self
-
-    def set_output_format(self, value: str):
-        if value == "html":
-            self.formatter_class = HTMLFormatter
-        elif value in ("ascii", "ansi"):
-            self.formatter_class = ANSIFormatter
         return self
 
     """
@@ -353,19 +347,19 @@ class Image2ASCII:
         height, width, _ = matrix.shape
 
         for left in range(width):
-            if matrix[:, left, V].any():
+            if matrix[:, left, Vi].any():
                 break
 
         for upper in range(height):
-            if matrix[upper, :, V].any():
+            if matrix[upper, :, Vi].any():
                 break
 
         for right in range(width, left, -1):
-            if matrix[:, right - 1, V].any():
+            if matrix[:, right - 1, Vi].any():
                 break
 
         for lower in range(height, upper, -1):
-            if matrix[lower - 1, :, V].any():
+            if matrix[lower - 1, :, Vi].any():
                 break
 
         return CropBox(left, upper, right, lower)
@@ -378,35 +372,27 @@ class Image2ASCII:
             filled/unfilled status will be a result of transparency AND
             whatever a conversion to monochrome spits out.
         If self.invert: Reverses the filled/unfilled status for all pixels.
+        Returns: 3-d array with shape = (image height, image width, 5), where
+            the last axis contains the following values for each pixel:
+            (red, green, blue, alpha, visibility)
         """
-        MIN, MAX = 0, 1  # Mnemonics for the minmax array
-
         if not image.width or not image.height:
-            return np.empty((0, 0, 0))
+            return np.empty((0, 0, 5))
 
         assert image.mode == "RGBA", "Image mode must be RGBA"
 
-        arr = np.empty((image.width * image.height, 6), dtype=np.uint8)
+        arr = np.empty((image.width * image.height, 5), dtype=np.uint64)
 
         # Fill first 4 values with R, G, B, A
         arr[:, :A + 1] = np.array(image.getdata())
 
-        # Array of (min(R, G, B), max(R, G, B)) for each pixel in image.
-        minmax = np.empty((image.width * image.height, 2))
-        minmax[:, MIN] = arr[:, :B + 1].min(axis=1)
-        minmax[:, MAX] = arr[:, :B + 1].max(axis=1)
+        # Fill the next 3 with H, S, Va
+        # arr[:, H:Va + 1] = rgb_to_hsv(arr[:, :B + 1])
 
-        # Saturation = (max - min) / (max + min), on scale 0 - 0xff
-        arr[:, S] = np.divide(
-            minmax[:, MAX] - minmax[:, MIN], minmax[:, MAX] + minmax[:, MIN],
-            out=np.zeros((image.width * image.height,)),
-            where=minmax[:, MAX] > 0  # avoid division by zero
-        ) * 0xff
-
-        # Now to find the V (visibility) values:
+        # Now to find the Vi (visibility) values:
         if self.fill_all:
             # All chars are visible except transparent (A < 0x80) ones:
-            arr[:, V] = arr[:, A] >= 0x80
+            arr[:, Vi] = arr[:, A] >= 0x80
         else:
             # Calculate perceived brightness per algorithm:
             # https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image.convert
@@ -414,23 +400,22 @@ class Image2ASCII:
 
             # Transparency (A < 0x80) still takes precedence:
             if not self.invert:
-                arr[:, V] = np.all((arr[:, A] >= 0x80, perceived_brightness >= 0x80), axis=0)
+                arr[:, Vi] = np.all((arr[:, A] >= 0x80, perceived_brightness >= 0x80), axis=0)
             else:
                 # If self.invert, make chars visible that have a perceived
                 # brightness _less_ than 0x80:
-                arr[:, V] = np.all((arr[:, A] >= 0x80, perceived_brightness < 0x80), axis=0)
+                arr[:, Vi] = np.all((arr[:, A] >= 0x80, perceived_brightness < 0x80), axis=0)
 
         # Reshape to image.height rows and image.width columns
-        return arr.reshape(image.height, image.width, 6)
+        return arr.reshape(image.height, image.width, 5)
 
     @timer
-    def get_section_color(self, section: np.ndarray, converter: ColorConverter) -> Optional[Color]:
+    def get_section_color(self, section: np.ndarray, converter: BaseColorConverter) -> Optional[np.ndarray]:
         # Generate a 2-d array of colour data for points where V > 0:
-        colors = section[section[:, :, V] > 0]
+        colors = section[section[:, :, Vi] > 0]
         if colors.size:
-            # Get median value and reduce it to array of R, G, B, S values:
-            color_arr = np.median(colors, axis=0)[np.array([R, G, B, S])]
-            return converter.from_array(color_arr)
+            color_arr = np.median(colors[:, np.array([R, G, B])], axis=0, out=np.empty(3, dtype=np.uint64))
+            return converter.closest(color_arr)
         return None
 
     def get_section_size(self, image: Image.Image) -> Tuple[int, int]:
@@ -530,22 +515,21 @@ class Image2ASCII:
         each section and concatenates them together. Then renders the result
         in the selected format.
         """
+        formatter = self.formatter_class(self.color_converter_class)
+
         if self.output is None:
             image, matrix = self.prepare_image()
             section_width, section_height = self.get_section_size(image)
             self.init_shapes(section_width, section_height)
             self.output = Output()
-
-            if self.color:
-                last_color = None
-                color_converter = self.color_converter_class()
+            last_color = None
 
             for start_y in range(0, image.height, section_height):
                 for start_x in range(0, image.width, section_width):
                     section = matrix[start_y:start_y + section_height, start_x:start_x + section_width]
                     if self.color:
-                        new_color = self.get_section_color(section, color_converter)
-                        if new_color is not None and new_color != last_color:
+                        new_color = self.get_section_color(section, formatter.color_converter)
+                        if new_color is not None and (last_color is None or not np.all(new_color == last_color)):
                             self.output.add_color(new_color)
                             last_color = new_color
                     nonzero = np.nonzero(section[:, :, -1])
@@ -558,7 +542,7 @@ class Image2ASCII:
                         char = self.get_char(nonzero_coords)
                     self.output.add_text(char)
                 self.output.add_br()
-        return self.formatter_class(self.output).render()
+        return formatter.render(self.output)
 
     def reset(self):
         self.output = None

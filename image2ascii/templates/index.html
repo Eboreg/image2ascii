@@ -96,18 +96,18 @@
                             </div>
                             <div class="col-12 col-md-4 mb-3">
                                 <div class="form-check">
-                                    <input type="checkbox" class="form-check-input" name="swap-bw" id="swap-bw"
-                                        value="true" {% if swap_bw %} checked{% endif %}>
-                                    <label class="form-check-label" for="swap-bw">Swap black/white characters</label>
-                                    <div class="form-text">Makes black output characters white and vice versa; does not affect any other colours.</div>
+                                    <input type="checkbox" class="form-check-input" name="fill-all"
+                                        id="fill-all" value="true"{% if fill_all %} checked{% endif %}{% if not color %} disabled{% endif %}>
+                                    <label class="form-check-label" for="fill-all">Fill all</label>
+                                    <div class="form-text">If checked, all sections of the image (except for any transparent ones) will be filled.</div>
                                 </div>
                             </div>
                             <div class="col-12 col-md-4 mb-3">
                                 <div class="form-check">
-                                    <input type="checkbox" class="form-check-input" name="fill-all"
-                                        id="fill-all" value="true"{% if fill_all %} checked{% endif %}{% if not color %} disabled{% endif %}>
-                                    <label class="form-check-label" for="fill-all">Fill all</label>
-                                    <div class="form-text">If checked, all sections of the image (except for any transparent ones) will be filled. Does not make any sense unless "colour" is also checked.</div>
+                                    <input type="checkbox" class="form-check-input" name="full-rgb"
+                                        id="full-rgb" value="true"{% if full_rgb %} checked{% endif %}{% if not color %} disabled{% endif %}>
+                                    <label class="form-check-label" for="full-rgb">Full RGB</label>
+                                    <div class="form-text">Whether to use all RGB colours instead of the 16 predefined ANSI colours.</div>
                                 </div>
                             </div>
                         </div>
@@ -172,6 +172,7 @@
 
         document.querySelector("#color").addEventListener("input", event => {
             document.querySelector("#fill-all").disabled = !event.target.checked;
+            document.querySelector("#full-rgb").disabled = !event.target.checked;
         })
 
         function onRangeChanged(elem, value) {
@@ -190,8 +191,10 @@
 
         document.querySelector("#flag").addEventListener("input", event => {
             if (event.target.value != "") {
-                document.querySelector("#fill-all").checked = true;
-                document.querySelector("#crop").checked = true;
+                ["#color", "#fill-all", "#full-rgb"].forEach(id => {
+                    document.querySelector(id).checked = true;
+                });
+                document.querySelector("#crop").checked = false;
                 document.querySelector("#image").required = false;
                 document.querySelector("#image").value = "";
             } else {
@@ -200,17 +203,17 @@
         });
 
         document.querySelector("button#reset").addEventListener("click", () => {
-            ["#color", "#crop"].forEach(id => {
+            ["#color", "#crop", "#full-rgb"].forEach(id => {
                 document.querySelector(id).checked = true;
             });
 
-            ["#invert", "#invert-colors", "#swap-bw", "#fill-all"].forEach(id => {
+            ["#invert", "#invert-colors", "#fill-all"].forEach(id => {
                 document.querySelector(id).checked = false;
             });
 
             document.querySelectorAll("input[type=range]").forEach(elem => {
-                elem.value = 1;
-                onRangeChanged(elem, 1);
+                elem.value = 1.0;
+                onRangeChanged(elem, 1.0);
             });
         });
     </script>

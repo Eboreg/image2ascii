@@ -19,7 +19,7 @@ source .venv/bin/activate
 
 ### CLI
 
-Installation per instructions above creates an `image2ascii` command; run it for more info. Play around with various combinations of `--invert`, `--invert-colors`, and `--swap-bw`, until the results are to your liking. `--crop` is also highly recommended.
+Installation per instructions above creates an `image2ascii` command; run it for more info. Play around with various combinations of `--invert`, `--invert-colors`, `--contrast`, `--brightness`, and `--color-balance`, until the results are to your liking. `--crop` is also highly recommended.
 
 ### HTML
 
@@ -27,8 +27,9 @@ This is the simplest possible way to render HTML:
 
 ```python
 from image2ascii.core import Image2ASCII
+from image2ascii.output import HTMLFormatter
 
-print(Image2ASCII("image.png").set_output_format("html").render())
+print(Image2ASCII("image.png", HTMLFormatter).render())
 ```
 
 But you are a highly cultured individual who shouldn't settle for that sad and pathetic baseline. Check out the `Image2ASCII` class for more options.

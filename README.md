@@ -19,7 +19,7 @@ source .venv/bin/activate
 
 ### CLI
 
-Installation per instructions above creates an `image2ascii` command; run it for more info. Play around with various combinations of `--invert`, `--invert-colors`, `--contrast`, `--brightness`, and `--color-balance`, until the results are to your liking. `--crop` is also highly recommended.
+Installation per instructions above creates an `image2ascii` command; run it for more info. Play around with various combinations of `--invert`, `--negative`, `--contrast`, `--brightness`, and `--color-balance`, until the results are to your liking. `--crop` is also highly recommended.
 
 ### HTML
 

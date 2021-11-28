@@ -4,7 +4,6 @@ from typing import List, Optional, Tuple, Type
 
 import numpy as np
 from PIL import Image, ImageEnhance, ImageOps
-from werkzeug.datastructures import FileStorage
 
 from image2ascii import (
     DEFAULT_ASCII_RATIO, DEFAULT_ASCII_WIDTH, DEFAULT_MIN_LIKENESS, DEFAULT_QUALITY, EMPTY_CHARACTER, FILLED_CHARACTER,
@@ -32,11 +31,10 @@ class Image2ASCII:
     _fill_all: bool = False
     _formatter_class: Type[BaseFormatter] = ANSIFormatter
     _invert: bool = False
-    _invert_colors: bool = False
     _min_likeness: float = DEFAULT_MIN_LIKENESS
+    _negative: bool = False
     _quality: int = DEFAULT_QUALITY
 
-    filename: Optional[str] = None
     image: Optional[Image.Image] = None
     output: Optional[Output] = None
 
@@ -169,13 +167,13 @@ class Image2ASCII:
             self.reset()
 
     @property
-    def invert_colors(self) -> bool:
-        return self._invert_colors
+    def negative(self) -> bool:
+        return self._negative
 
-    @invert_colors.setter
-    def invert_colors(self, value: bool):
-        if value != self._invert_colors:
-            self._invert_colors = value
+    @negative.setter
+    def negative(self, value: bool):
+        if value != self._negative:
+            self._negative = value
             self.reset()
 
     @property
@@ -205,15 +203,15 @@ class Image2ASCII:
         self,
         color: Optional[bool] = None,
         invert: Optional[bool] = None,
-        invert_colors: Optional[bool] = None,
+        negative: Optional[bool] = None,
         fill_all: Optional[bool] = None,
     ):
         if color is not None:
             self.color = color
         if invert is not None:
             self.invert = invert
-        if invert_colors is not None:
-            self.invert_colors = invert_colors
+        if negative is not None:
+            self.negative = negative
         if fill_all is not None:
             self.fill_all = fill_all
         return self
@@ -282,12 +280,12 @@ class Image2ASCII:
         return image
 
     @timer
-    def do_invert(self, image: Image.Image) -> Image.Image:
+    def do_negative(self, image: Image.Image) -> Image.Image:
         """
         For some reason, PIL.ImageOps.invert() does not support RGBA.
         This implementation leaves the alpha channel as it is.
         """
-        if self.invert_colors:
+        if self.negative:
             if image.mode == "RGBA":
                 lut = [i for i in range(0xff, -1, -1)] * 3 + [i for i in range(0xff + 1)]
                 return image.point(lut)
@@ -305,10 +303,10 @@ class Image2ASCII:
 
         if image.width < end_width:
             # Upsize to the nearest multiple of self.ascii_width
-            if not image.width % self.quality:
+            if not image.width % self.ascii_width:
                 end_width = image.width
             else:
-                end_width = image.width + self.quality - image.width % self.quality
+                end_width = image.width + self.ascii_width - image.width % self.ascii_width
 
         if image.width != end_width:
             image = image.resize((end_width, round((end_width / image.width) * image.height)), resample=Image.NEAREST)
@@ -449,13 +447,6 @@ class Image2ASCII:
 
     @timer
     def load(self, file):
-        if isinstance(file, str):
-            self.filename = file
-        elif isinstance(file, FileStorage):
-            self.filename = file.filename
-        elif hasattr(file, "name") and isinstance(file.name, str):
-            self.filename = file.name
-
         with Image.open(file) as image:
             image.load()
         if image.mode != "RGBA":
@@ -492,7 +483,7 @@ class Image2ASCII:
         image = self.image.copy()
 
         image = self.do_enhance(image)
-        image = self.do_invert(image)
+        image = self.do_negative(image)
 
         resized_image = self.do_resize(image)
         matrix = self.get_matrix(resized_image)

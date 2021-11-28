@@ -2,156 +2,126 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from jinja2 import Environment, PackageLoader
-from werkzeug.wrappers import Request, Response
+from flask import Flask, jsonify, make_response, render_template, request
+from werkzeug.wrappers import Request
 
 from image2ascii.color import HTMLANSIColorConverter, HTMLFullRGBColorConverter
 from image2ascii.core import Image2ASCII
 from image2ascii.db import Session, ShelfDB
 from image2ascii.output import HTMLFormatter
 
+FLAG_DIR = Path(__file__).parent / "flags"
+DB = ShelfDB()
 
-class Application:
-    # http://wsgi.tutorial.codepoint.net/application-interface
-    # https://www.toptal.com/python/pythons-wsgi-server-application-interface
+application = Flask(__name__)
 
-    def __init__(self):
-        self.db = ShelfDB()
-        self.flag_dir = Path(__file__).parent / "flags"
 
-    def __call__(self, environ, start_response):
-        request = Request(environ)
-        session = self.get_session(request)
-        response = self.get_response(request, session)
-        return response(environ, start_response)
+def get_flags():
+    for flag_file in sorted(FLAG_DIR.iterdir()):
+        if flag_file.is_file():
+            yield dict(value=flag_file.name, text=flag_file.stem)
 
-    def get_session(self, request: Request) -> Session:
-        try:
-            return self.db.get_session(request.cookies["session_id"])
-        except KeyError:
-            # Could be because cookie doesn't exist, or session doesn't
-            return Session()
 
-    def get_context(self, request: Request, session: Session) -> dict:
-        context: Dict[str, Any] = dict(
+def get_i2a(request: Request, i2a: Optional[Image2ASCII]) -> Image2ASCII:
+    file = request.files.get("image")
+    flag = request.form.get("flag") or None
+
+    if file is not None and not file.filename:
+        file = None
+
+    if file is None and i2a is None and flag is None:
+        raise ValueError("You need to upload an image or select a flag.")
+    if i2a is None:
+        i2a = Image2ASCII()
+
+    if file is not None:
+        i2a.load(file)
+    elif flag is not None:
+        i2a.load(FLAG_DIR / flag)
+
+    i2a.formatter_class = HTMLFormatter
+
+    if "full-rgb" in request.form:
+        i2a.color_converter_class = HTMLFullRGBColorConverter
+    else:
+        i2a.color_converter_class = HTMLANSIColorConverter
+
+    i2a.color_settings(
+        color="color" in request.form,
+        invert="invert" in request.form,
+        negative="negative" in request.form,
+        fill_all="fill-all" in request.form,
+    )
+
+    i2a.enhancement_settings(
+        contrast=float(request.form["contrast"]),
+        brightness=float(request.form["brightness"]),
+        color_balance=float(request.form["color-balance"]),
+    )
+
+    i2a.size_settings(crop="crop" in request.form)
+
+    return i2a
+
+
+def get_context(session: Session) -> dict:
+    context: Dict[str, Any] = dict(flags=get_flags())
+
+    if session.i2a:
+        context.update(
+            output=session.i2a.render(),
+            color=session.i2a.color,
+            invert=session.i2a.invert,
+            crop=session.i2a.crop,
+            negative=session.i2a.negative,
+            fill_all=session.i2a.fill_all,
+            full_rgb=session.i2a.color_converter_class is not HTMLANSIColorConverter,
+            contrast=session.i2a.contrast,
+            brightness=session.i2a.brightness,
+            color_balance=session.i2a.color_balance,
+        )
+    else:
+        context.update(
+            color=True,
+            invert=False,
+            crop=True,
+            negative=False,
+            fill_all=False,
+            full_rgb=True,
             contrast=1.0,
             brightness=1.0,
             color_balance=1.0,
-            flags=self.get_flags(),
         )
 
-        if request.method == "POST":
-            context.update(
-                color="color" in request.form,
-                invert="invert" in request.form,
-                crop="crop" in request.form,
-                invert_colors="invert-colors" in request.form,
-                fill_all="fill-all" in request.form,
-                full_rgb="full-rgb" in request.form,
-                contrast=request.form.get("contrast", 1),
-                brightness=request.form.get("brightness", 1),
-                color_balance=request.form.get("color-balance", 1),
-                selected_flag=request.form.get("flag"),
-            )
+    return context
 
-            try:
-                i2a = self.get_i2a(request, session.i2a)
-                session.i2a = i2a
-                context.update(
-                    output=i2a.render(),
-                    filename=i2a.filename,
-                )
-            except Exception as e:
-                context.update(output=str(e))
 
-        else:
-            context.update(
-                color=True,
-                invert=False,
-                crop=True,
-                invert_colors=False,
-                fill_all=False,
-                full_rgb=True,
-            )
-            if session.i2a:
-                context.update(
-                    output=session.i2a.render(),
-                    filename=session.i2a.filename,
-                    color=session.i2a.color,
-                    invert=session.i2a.invert,
-                    crop=session.i2a.crop,
-                    invert_colors=session.i2a.invert_colors,
-                    fill_all=session.i2a.fill_all,
-                    full_rgb=session.i2a.color_converter_class is not HTMLANSIColorConverter,
-                    contrast=session.i2a.contrast,
-                    brightness=session.i2a.brightness,
-                    color_balance=session.i2a.color_balance,
-                )
+def get_session(id: str) -> Session:
+    try:
+        return DB.get_session(id)
+    except KeyError:
+        return Session()
 
-        return context
 
-    def get_flags(self):
-        for flag_file in sorted(self.flag_dir.iterdir()):
-            if flag_file.is_file():
-                yield dict(value=flag_file.name, text=flag_file.stem)
+@application.route("/")
+def index():
+    session = get_session(request.cookies["session_id"])
+    context = get_context(session)
+    DB.save_session(session)
+    response = make_response(render_template("index.html", **context))
+    if request.cookies.get("session_id") != session.uuid:
+        response.set_cookie("session_id", session.uuid, max_age=timedelta(days=7))
+    return response
 
-    def get_html(self, context: dict) -> str:
-        jinja = Environment(loader=PackageLoader("image2ascii", "templates"))
-        template = jinja.get_template("index.html")
-        return template.render(context)
 
-    def get_response(self, request: Request, session: Session) -> Response:
-        if request.path != "/":
-            return Response("What are you trying to do?", status=404)
-        if request.method == "HEAD":
-            return Response()
-        html = self.get_html(self.get_context(request, session))
-        self.db.save_session(session)
-        response = Response(html, mimetype="text/html")
-        if request.cookies.get("session_id") != session.uuid:
-            response.set_cookie("session_id", session.uuid, max_age=timedelta(days=7))
+@application.route("/post", methods=["POST"])
+def post():
+    session = get_session(request.cookies["session_id"])
+    try:
+        i2a = get_i2a(request, session.i2a)
+        session.i2a = i2a
+        response = jsonify(output=i2a.render())
+        DB.save_session(session)
         return response
-
-    def get_i2a(self, request: Request, i2a: Optional[Image2ASCII]) -> Image2ASCII:
-        file = request.files.get("image")
-        flag = request.form.get("flag") or None
-
-        if file is not None and not file.filename:
-            file = None
-
-        if file is None and i2a is None and flag is None:
-            raise ValueError("You need to upload an image or select a flag.")
-        if i2a is None:
-            i2a = Image2ASCII()
-
-        if file is not None:
-            i2a.load(file)
-        elif flag is not None:
-            i2a.load(self.flag_dir / flag)
-
-        i2a.formatter_class = HTMLFormatter
-
-        if "full-rgb" in request.form:
-            i2a.color_converter_class = HTMLFullRGBColorConverter
-        else:
-            i2a.color_converter_class = HTMLANSIColorConverter
-
-        i2a.color_settings(
-            color="color" in request.form,
-            invert="invert" in request.form,
-            invert_colors="invert-colors" in request.form,
-            fill_all="fill-all" in request.form,
-        )
-
-        i2a.enhancement_settings(
-            contrast=float(request.form["contrast"]),
-            brightness=float(request.form["brightness"]),
-            color_balance=float(request.form["color-balance"]),
-        )
-
-        i2a.size_settings(crop="crop" in request.form)
-
-        return i2a
-
-
-application = Application()
+    except Exception as e:
+        return jsonify(output=str(e))

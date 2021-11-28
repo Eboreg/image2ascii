@@ -11,6 +11,8 @@ R, G, B = range(3)
 @timer
 def rgb_to_hsv(rgb: np.ndarray) -> np.ndarray:
     """
+    Not used right now, but pretty neat to have, I guess.
+
     :param rgb: An N-d array, where the innermost one has exactly 3 positions
         (R, G, B).
     :returns: Array with the same shape as `rgb`, but populated with H, S, V

@@ -5,9 +5,7 @@
 #    pip-compile requirements.dev.in
 #
 -e file:./
-    # via
-    #   -c requirements.txt
-    #   -r requirements.dev.in
+    # via -r requirements.in
 autopep8==1.6.0
     # via -r requirements.dev.in
 backcall==0.2.0
@@ -18,24 +16,26 @@ certifi==2021.10.8
     # via requests
 charset-normalizer==2.0.7
     # via requests
+click==8.0.3
+    # via flask
 colorama==0.4.4
     # via
-    #   -c requirements.txt
+    #   -r requirements.in
     #   image2ascii
 cycler==0.11.0
-    # via
-    #   -c requirements.txt
-    #   matplotlib
+    # via matplotlib
 decorator==5.1.0
     # via
     #   ipdb
     #   ipython
 flake8==4.0.1
     # via -r requirements.dev.in
-fonttools==4.28.1
+flask==2.0.2
     # via
-    #   -c requirements.txt
-    #   matplotlib
+    #   -r requirements.in
+    #   image2ascii
+fonttools==4.28.1
+    # via matplotlib
 idna==3.3
     # via requests
 ipdb==0.13.9
@@ -44,23 +44,22 @@ ipython==7.29.0
     # via
     #   -r requirements.dev.in
     #   ipdb
+itsdangerous==2.0.1
+    # via flask
 jedi==0.18.1
     # via ipython
 jinja2==3.0.3
     # via
-    #   -c requirements.txt
+    #   -r requirements.in
+    #   flask
     #   image2ascii
 kiwisolver==1.3.2
-    # via
-    #   -c requirements.txt
-    #   matplotlib
+    # via matplotlib
 markupsafe==2.0.1
-    # via
-    #   -c requirements.txt
-    #   jinja2
+    # via jinja2
 matplotlib==3.5.0
     # via
-    #   -c requirements.txt
+    #   -r requirements.in
     #   image2ascii
 matplotlib-inline==0.1.3
     # via ipython
@@ -72,11 +71,11 @@ mypy-extensions==0.4.3
     # via mypy
 numpy==1.21.4
     # via
-    #   -c requirements.txt
+    #   -r requirements.in
+    #   image2ascii
     #   matplotlib
 packaging==21.2
     # via
-    #   -c requirements.txt
     #   matplotlib
     #   setuptools-scm
 parso==0.8.2
@@ -87,7 +86,7 @@ pickleshare==0.7.5
     # via ipython
 pillow==8.4.0
     # via
-    #   -c requirements.txt
+    #   -r requirements.in
     #   image2ascii
     #   matplotlib
 prompt-toolkit==3.0.22
@@ -104,23 +103,16 @@ pygments==2.10.0
     # via ipython
 pyparsing==2.4.7
     # via
-    #   -c requirements.txt
     #   matplotlib
     #   packaging
 python-dateutil==2.8.2
-    # via
-    #   -c requirements.txt
-    #   matplotlib
+    # via matplotlib
 requests==2.26.0
     # via -r requirements.dev.in
 setuptools-scm==6.3.2
-    # via
-    #   -c requirements.txt
-    #   matplotlib
+    # via matplotlib
 six==1.16.0
-    # via
-    #   -c requirements.txt
-    #   python-dateutil
+    # via python-dateutil
 soupsieve==2.3.1
     # via beautifulsoup4
 toml==0.10.2
@@ -129,9 +121,7 @@ toml==0.10.2
     #   ipdb
     #   mypy
 tomli==1.2.2
-    # via
-    #   -c requirements.txt
-    #   setuptools-scm
+    # via setuptools-scm
 traitlets==5.1.1
     # via
     #   ipython
@@ -148,7 +138,8 @@ wcwidth==0.2.5
     # via prompt-toolkit
 werkzeug==2.0.2
     # via
-    #   -c requirements.txt
+    #   -r requirements.in
+    #   flask
     #   image2ascii
 
 # The following packages are considered to be unsafe in a requirements file:

@@ -12,7 +12,7 @@ from image2ascii import (
 )
 from image2ascii.core import Image2ASCII
 from image2ascii.output import ANSIFormatter
-from image2ascii.wsgi import Application
+from image2ascii.wsgi import application
 
 
 def main():
@@ -39,7 +39,7 @@ def main():
         "--invert",
         action="store_true",
         help="Fills characters that would have been empty, and vice versa. Note that this is not the same as " +
-             "--invert-colors."
+             "--negative."
     )
     parser.add_argument(
         "--crop",
@@ -95,10 +95,9 @@ def main():
         help="Adjusts colour balance of source image before converting. 1.0 = original image, 0.0 = B/W image."
     )
     parser.add_argument(
-        "--invert-colors",
+        "--negative",
         action="store_true",
-        help="Inverts the colours (yes, I use British spelling in text and American in code; deal with it) " +
-             "of the image before processing."
+        help="Inverts the colours of the image before processing."
     )
     parser.add_argument("--test-server", action="store_true", help="Fires up a test server on port 8000.")
     parser.add_argument(
@@ -112,7 +111,7 @@ def main():
 
     if args.test_server:
         print("Listening on port 8000")
-        httpd = make_server("localhost", 8000, Application())
+        httpd = make_server("localhost", 8000, application)
         httpd.serve_forever()
         return
 
@@ -129,7 +128,7 @@ def main():
     i2a.color_settings(
         color=args.color,
         invert=args.invert,
-        invert_colors=args.invert_colors,
+        negative=args.negative,
         fill_all=args.fill_all,
     )
     i2a.enhancement_settings(contrast=args.contrast, brightness=args.brightness, color_balance=args.color_balance)

@@ -1,5 +1,6 @@
 -e file:./
 colorama
+Flask
 Jinja2
 matplotlib
 numpy

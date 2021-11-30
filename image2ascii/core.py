@@ -20,6 +20,7 @@ R, G, B, A, Vi, H, S, Va = range(8)
 
 
 class Image2ASCII:
+    _ascii_max_height: Optional[int] = None
     _ascii_ratio: float = DEFAULT_ASCII_RATIO
     _ascii_width: int = DEFAULT_ASCII_WIDTH
     _brightness: float = 1.0
@@ -56,6 +57,16 @@ class Image2ASCII:
     """
     PROPERTIES
     """
+    @property
+    def ascii_max_height(self) -> Optional[int]:
+        return self._ascii_max_height
+
+    @ascii_max_height.setter
+    def ascii_max_height(self, value: Optional[int]):
+        if value != self._ascii_max_height:
+            self._ascii_max_height = value
+            self.reset()
+
     @property
     def ascii_ratio(self) -> float:
         return self._ascii_ratio
@@ -239,10 +250,17 @@ class Image2ASCII:
 
     def size_settings(
         self,
+        ascii_max_height: Optional[int] = None,
         ascii_width: Optional[int] = None,
         ascii_ratio: Optional[float] = None,
         crop: Optional[bool] = None
     ):
+        """
+        To explicitly set self.ascii_max_height to None, if it has previously
+        been set to something else, do `i2a.ascii_max_height = None` instead.
+        """
+        if ascii_max_height is not None:
+            self.ascii_max_height = ascii_max_height
         if ascii_width is not None:
             self.ascii_width = ascii_width
         if ascii_ratio is not None:
@@ -263,7 +281,7 @@ class Image2ASCII:
         if self.crop:
             ratio = image.height / matrix.shape[0]
             cropbox = self.get_crop_box(matrix)
-            if cropbox != CropBox(0, 0, image.width, image.height):
+            if cropbox != CropBox(0, 0, matrix.shape[1], matrix.shape[0]):
                 cropbox = CropBox(*[round(v * ratio) for v in cropbox])
                 image = image.crop(cropbox)
                 return image, True
@@ -296,17 +314,34 @@ class Image2ASCII:
     def do_resize(self, image: Image.Image) -> Image.Image:
         """
         Resize image to a multiple of the sizes of the sections it will be
-        divided into, with a width not exceeding self.ascii_width *
-        self.quality.
-        """
-        end_width = self.ascii_width * self.quality
+        divided into, with a width not exceeding (self.ascii_width *
+        self.quality), and a height not exceeding (self.ascii_max_height *
+        self.quality * self.ascii_ratio), in case self.ascii_max_height is not
+        None.
 
-        if image.width < end_width:
-            # Upsize to the nearest multiple of self.ascii_width
-            if not image.width % self.ascii_width:
-                end_width = image.width
+        Note: A small value for self.ascii_max_height will not make the output
+        narrower, it will only make it less detailed, as it will decrease the
+        size of the source image before processing. It is not intended for
+        shrinking the output but to reduce CPU load for very "thin" images.
+        """
+        end_width = min(image.width, self.ascii_width * self.quality)
+
+        if self.ascii_max_height is not None:
+            max_height = round(self.ascii_max_height * self.quality * self.ascii_ratio)
+            if (image.height * self.ascii_ratio * (end_width / image.width)) > max_height:
+                # Image is still too tall after adjusting width; decrease
+                # end width so end height == max height
+                end_width = round(image.width * (max_height / image.height) / self.ascii_ratio)
+
+        # Round to the nearest multiple of self.ascii_width if needed
+        if end_width % self.ascii_width:
+            if end_width > self.ascii_width and end_width % self.ascii_width < self.ascii_width * 0.25:
+                # We're over self.ascii_width and arbitrarily close to the
+                # multiple below; shrink
+                end_width -= end_width % self.ascii_width
             else:
-                end_width = image.width + self.ascii_width - image.width % self.ascii_width
+                # Otherwise, grow
+                end_width += self.ascii_width - end_width % self.ascii_width
 
         if image.width != end_width:
             image = image.resize((end_width, round((end_width / image.width) * image.height)), resample=Image.NEAREST)

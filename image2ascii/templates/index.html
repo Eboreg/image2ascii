@@ -45,11 +45,6 @@
             border-radius: 0;
         }
 
-        .form-control::file-selector-button {
-            background-color: var(--bs-dark);
-            color: var(--bs-light);
-        }
-
         .box {
             position: relative;
             padding: 1rem;
@@ -149,7 +144,7 @@
                                     <label for="contrast" class="form-label">Contrast</label>
                                     <div class="row">
                                         <div class="col-auto flex-grow-1">
-                                            <input type="range" name="contrast" id="contrast" class="form-range" min="0" max="4"
+                                            <input type="range" name="contrast" id="contrast" class="form-range" min="0.5" max="3.0"
                                                 step="0.1" value="{{ contrast }}">
                                         </div>
                                         <div id="contrast-value" class="col-auto">{{ contrast }}</div>
@@ -159,7 +154,7 @@
                                     <label for="brightness" class="form-label">Brightness</label>
                                     <div class="row">
                                         <div class="col-auto flex-grow-1">
-                                            <input type="range" name="brightness" id="brightness" class="form-range" min="0" max="4"
+                                            <input type="range" name="brightness" id="brightness" class="form-range" min="0.5" max="3.0"
                                                 step="0.1" value="{{ brightness }}">
                                         </div>
                                         <div class="col-auto" id="brightness-value">{{ brightness }}</div>
@@ -169,8 +164,8 @@
                                     <label for="color-balance" class="form-label">Colour balance</label>
                                     <div class="row">
                                         <div class="col-auto flex-grow-1">
-                                            <input type="range" name="color-balance" id="color-balance" class="form-range" min="0"
-                                                max="4" step="0.1" value="{{ color_balance }}">
+                                            <input type="range" name="color-balance" id="color-balance" class="form-range" min="0.5"
+                                                max="3.0" step="0.1" value="{{ color_balance }}">
                                         </div>
                                         <div class="col-auto" id="color-balance-value">{{ color_balance }}</div>
                                     </div>
@@ -181,7 +176,7 @@
                         </div>
 
                         <div class="col-12 col-md mt-2">
-                            <div class="box">
+                            <div class="box pb-0">
                                 <div class="box-label">Result</div>
                                 <div class="row align-items-center mb-3">
                                     <div class="col-auto">
@@ -198,7 +193,7 @@
                                         </select>
                                     </div>
                                 </div>
-                                <div id="output">{{ output|safe }}</div>
+                                <div id="output" class="mb-3">{{ output|safe }}</div>
                             </div>
                         </div>
                     </div>
@@ -220,6 +215,7 @@
         var isSubmitting = false;
 
         function onRangeChanged(elem, value) {
+            // Updates legend at the side of range input
             document.querySelector("#" + elem.id + "-value").textContent = Number(value).toPrecision(2);
         }
 
@@ -241,22 +237,27 @@
         }
 
         document.querySelector("#color").addEventListener("input", event => {
+            // If not color, then fill-all and full-rgb make no sense
             document.querySelector("#fill-all").disabled = !event.target.checked;
             document.querySelector("#full-rgb").disabled = !event.target.checked;
         })
 
         document.querySelectorAll("input[type=range]").forEach(elem => {
+            // Update range legends on user input
             elem.addEventListener("input", event => {
                 onRangeChanged(elem, event.target.value);
             })
         })
 
         document.querySelector("#image").addEventListener("input", event => {
+            // When image is selected, unset flag field and submit
             document.querySelector("#flag").value = "";
             submitForm();
         })
 
         document.querySelector("#flag").addEventListener("input", event => {
+            // When flag is selected, set some sensible default values,
+            // unset image field, and submit
             if (event.target.value != "") {
                 ["#color", "#fill-all", "#full-rgb"].forEach(id => {
                     document.querySelector(id).checked = true;
@@ -268,6 +269,7 @@
         });
 
         document.querySelector("button#reset").addEventListener("click", () => {
+            // "Reset adjustments" button; revert to defaults
             ["#color", "#crop", "#full-rgb"].forEach(id => {
                 document.querySelector(id).checked = true;
             });
@@ -285,22 +287,26 @@
         var dropOverlay = document.querySelector(".drop-overlay");
 
         document.body.addEventListener("dragenter", event => {
-            event.stopPropagation();
+            // When dragging file over document, show overlay
             event.preventDefault();
+            event.stopPropagation();
             dropOverlay.style.display = "block";
         });
         dropOverlay.addEventListener("dragover", event => {
-            event.stopPropagation();
             event.preventDefault();
+            event.stopPropagation();
         });
         dropOverlay.addEventListener("dragleave", event => {
-            event.stopPropagation();
+            // Drag leaving the overlay; back to normal
             event.preventDefault();
+            event.stopPropagation();
             dropOverlay.style.display = "none";
         });
         dropOverlay.addEventListener("drop", event => {
-            event.stopPropagation();
+            // File dropped; hide overlay and trigger "input" event on image
+            // field, which in turn triggers a form submit (above)
             event.preventDefault();
+            event.stopPropagation();
             dropOverlay.style.display = "none";
             document.querySelector("#image").files = event.dataTransfer.files;
             document.querySelector("#image").dispatchEvent(new Event("input"));

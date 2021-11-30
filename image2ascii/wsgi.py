@@ -10,6 +10,7 @@ from image2ascii.core import Image2ASCII
 from image2ascii.db import Session, ShelfDB
 from image2ascii.output import HTMLFormatter
 
+ASCII_MAX_HEIGHT = 150
 FLAG_DIR = Path(__file__).parent / "flags"
 DB = ShelfDB()
 
@@ -59,7 +60,7 @@ def get_i2a(request: Request, i2a: Optional[Image2ASCII]) -> Image2ASCII:
         color_balance=float(request.form["color-balance"]),
     )
 
-    i2a.size_settings(crop="crop" in request.form)
+    i2a.size_settings(crop="crop" in request.form, ascii_max_height=ASCII_MAX_HEIGHT)
 
     return i2a
 

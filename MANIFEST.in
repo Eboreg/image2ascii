@@ -1,2 +1,3 @@
 graft image2ascii/templates
 graft image2ascii/flags
+graft image2ascii/static

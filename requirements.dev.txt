@@ -108,7 +108,9 @@ pyparsing==2.4.7
 python-dateutil==2.8.2
     # via matplotlib
 requests==2.26.0
-    # via -r requirements.dev.in
+    # via
+    #   -r requirements.in
+    #   image2ascii
 setuptools-scm==6.3.2
     # via matplotlib
 six==1.16.0

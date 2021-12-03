@@ -5,4 +5,5 @@ Jinja2
 matplotlib
 numpy
 Pillow
+requests
 Werkzeug

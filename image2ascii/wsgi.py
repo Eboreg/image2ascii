@@ -1,7 +1,9 @@
+import io
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+import requests
 from flask import Flask, jsonify, make_response, render_template, request
 from werkzeug.wrappers import Request
 
@@ -24,19 +26,31 @@ def get_flags():
 
 
 def get_i2a(request: Request, i2a: Optional[Image2ASCII]) -> Image2ASCII:
-    file = request.files.get("image")
+    image: Any = request.files.get("image")
+    image_url = request.form.get("image-url") or None
     flag = request.form.get("flag") or None
 
-    if file is not None and not file.filename:
-        file = None
+    if image is not None and not image.filename:
+        image = None
 
-    if file is None and i2a is None and flag is None:
+    if image is None and image_url is not None:
+        try:
+            response = requests.get(image_url, timeout=5.0)
+        except Exception:
+            raise ValueError("Could not fetch image file -- possibly timeout.")
+        if response.status_code != 200 or not isinstance(response.content, bytes) or not len(response.content):
+            raise ValueError("Could not fetch image file.")
+        image = io.BytesIO(response.content)
+
+    if image is None and i2a is None and flag is None:
         raise ValueError("You need to upload an image or select a flag.")
     if i2a is None:
         i2a = Image2ASCII()
 
-    if file is not None:
-        i2a.load(file)
+    if image is not None:
+        i2a.load(image)
+        if hasattr(image, "close"):
+            image.close()
     elif flag is not None:
         i2a.load(FLAG_DIR / flag)
 

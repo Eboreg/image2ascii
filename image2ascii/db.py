@@ -27,7 +27,7 @@ class BaseDB:
 
 
 class ShelfDB(BaseDB):
-    def __init__(self, filename="shelf"):
+    def __init__(self, filename="image2ascii_db"):
         self.filename = filename
         with shelve.open(self.filename) as shelf:
             if "sessions" not in shelf:

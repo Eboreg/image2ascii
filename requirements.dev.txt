@@ -180,6 +180,8 @@ typing-extensions==4.0.0
     # via mypy
 urllib3==1.26.7
     # via requests
+uwsgi==2.0.20
+    # via -r requirements.in
 wcwidth==0.2.5
     # via prompt-toolkit
 webencodings==0.5.1

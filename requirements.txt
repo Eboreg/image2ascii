@@ -66,6 +66,8 @@ tomli==1.2.2
     # via setuptools-scm
 urllib3==1.26.7
     # via requests
+uwsgi==2.0.20
+    # via -r requirements.in
 werkzeug==2.0.2
     # via flask
 

@@ -10,6 +10,7 @@ from wsgiref.simple_server import make_server
 import requests
 from flask import Flask, Request, jsonify, make_response, render_template, request
 
+from image2ascii import __version__
 from image2ascii.color import HTMLANSIColorConverter, HTMLFullRGBColorConverter
 from image2ascii.core import Image2ASCII
 from image2ascii.db import Session, ShelfDB
@@ -39,11 +40,16 @@ def get_i2a(request: Request, i2a: Optional[Image2ASCII]) -> Image2ASCII:
 
     if image is None and image_url is not None:
         try:
-            response = requests.get(image_url, timeout=5.0)
+            headers = {"User-Agent": f"image2ascii/{__version__} (https://github.com/Eboreg/image2ascii)"}
+            response = requests.get(image_url, headers=headers, timeout=5.0)
         except Exception as e:
             raise ValueError(f"Could not fetch image file: {shorten_string(str(e), 200)}")
-        if response.status_code != 200 or not isinstance(response.content, bytes) or not len(response.content):
-            raise ValueError("Could not fetch image file.")
+        if response.status_code != 200:
+            raise ValueError(f"Could not fetch image file (HTTP status code={response.status_code}).")
+        if not isinstance(response.content, bytes):
+            raise ValueError(f"Could not fetch image file (response content has type '{type(response.content)}').")
+        if not len(response.content):
+            raise ValueError("Could not fetch image file (response is empty).")
         image = io.BytesIO(response.content)
 
     if image is None and i2a is None and flag is None:
@@ -84,7 +90,10 @@ def get_i2a(request: Request, i2a: Optional[Image2ASCII]) -> Image2ASCII:
 
 
 def get_context(session: Session) -> dict:
-    context: Dict[str, Any] = dict(flags=get_flags())
+    context: Dict[str, Any] = dict(
+        flags=get_flags(),
+        version=__version__,
+    )
 
     if session.i2a:
         context.update(

@@ -2,7 +2,6 @@
 
 import argparse
 import time
-from wsgiref.simple_server import make_server
 
 import colorama
 from colorama import Fore
@@ -12,7 +11,6 @@ from image2ascii import (
 )
 from image2ascii.core import Image2ASCII
 from image2ascii.output import ANSIFormatter
-from image2ascii.wsgi import application
 
 
 def main():
@@ -110,10 +108,24 @@ def main():
     args = parser.parse_args()
 
     if args.test_server:
-        print("Listening on port 8000")
-        httpd = make_server("localhost", 8000, application)
-        httpd.serve_forever()
-        return
+        """
+        Doing this import here because the "www" requirements will not
+        necessarily be installed.
+        """
+        try:
+            from wsgiref.simple_server import make_server
+            from image2ascii.wsgi import application
+
+            print("Listening on port 8000")
+            httpd = make_server("localhost", 8000, application)
+            httpd.serve_forever()
+        except (ImportError, ModuleNotFoundError):
+            print(
+                "Could not start test server due to missing packages. You need to install image2ascii using "
+                "`pip install image2ascii[www]`, or manually install `flask` and `requests`."
+            )
+        finally:
+            return
 
     if args.file is None:
         parser.print_help()

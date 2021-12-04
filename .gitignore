@@ -11,6 +11,7 @@ config.ini
 *.csv
 **/notes.txt
 /shelf*
+/image2ascii_db*
 
 # Elastic Beanstalk Files
 .elasticbeanstalk/*

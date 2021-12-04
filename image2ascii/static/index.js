@@ -159,4 +159,16 @@ window.onload = () => {
         event.preventDefault();
         submitForm();
     });
+
+    document.addEventListener("paste", async event => {
+        // Handle pasted images
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.clipboardData) {
+            if (event.clipboardData.files.length > 0) {
+                document.querySelector("#image").files = event.clipboardData.files;
+                document.querySelector("#image").dispatchEvent(new Event("input"));
+            }
+        }
+    });
 };

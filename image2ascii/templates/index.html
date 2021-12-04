@@ -40,7 +40,7 @@
 
                         <div class="col-12 mb-2">
                             <div class="row align-items-center justify-content-lg-evenly">
-                                <div class="col-lg-auto my-3 d-none d-lg-block">
+                                <div class="col-auto my-3 d-none d-xl-block">
                                     <img src="{{ url_for('static', filename='pointing.png') }}" class="pointing-hand">
                                 </div>
                                 <div class="col col-lg-auto mt-3">
@@ -49,7 +49,7 @@
                                             <input type="file" name="image" id="image" class="d-none" accept="image/*">
                                             <input type="hidden" name="image-url" id="image-url">
                                             <a href=""><label for="image">Upload an image</label></a>,
-                                            drag &amp; drop it anywhere, or select a flag you like:
+                                            paste or drag &amp; drop it anywhere, or select a flag you like:
                                         </div>
                                         <div class="col-12 col-lg-auto mb-3">
                                             <select name="flag" id="flag" class="form-select bg-dark text-light form-control">
@@ -61,7 +61,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-lg-auto my-3 d-none d-lg-block">
+                                <div class="col-auto my-3 d-none d-xl-block">
                                     <img src="{{ url_for('static', filename='pointing.png') }}" class="pointing-hand mirrored">
                                 </div>
                             </div>
@@ -114,7 +114,7 @@
                                         <input type="checkbox" class="form-check-input" name="full-rgb"
                                             id="full-rgb" value="true"{% if full_rgb %} checked{% endif %}{% if not color %} disabled{% endif %}>
                                         <label class="form-check-label" for="full-rgb">Full RGB</label>
-                                        <div class="form-text">Whether to use all 16,777,216 RGB colours instead of the 16 predefined ANSI colours.</div>
+                                        <div class="form-text">Whether to make use of all 16,777,216 RGB colours, instead of the 16 predefined ANSI colours.</div>
                                     </div>
                                 </div>
                             </div>

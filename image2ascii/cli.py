@@ -97,7 +97,6 @@ def main():
         action="store_true",
         help="Inverts the colours of the image before processing."
     )
-    parser.add_argument("--test-server", action="store_true", help="Fires up a test server on port 8000.")
     parser.add_argument(
         "--debug",
         action="store_true",
@@ -106,26 +105,6 @@ def main():
     parser.add_argument("--version", action="version", version=__version__)
 
     args = parser.parse_args()
-
-    if args.test_server:
-        """
-        Doing this import here because the "www" requirements will not
-        necessarily be installed.
-        """
-        try:
-            from wsgiref.simple_server import make_server
-            from image2ascii.wsgi import application
-
-            print("Listening on port 8000")
-            httpd = make_server("localhost", 8000, application)
-            httpd.serve_forever()
-        except (ImportError, ModuleNotFoundError):
-            print(
-                "Could not start test server due to missing packages. You need to install image2ascii using "
-                "`pip install image2ascii[www]`, or manually install `flask` and `requests`."
-            )
-        finally:
-            return
 
     if args.file is None:
         parser.print_help()

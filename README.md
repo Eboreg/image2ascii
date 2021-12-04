@@ -8,6 +8,17 @@ It can also crop, output ANSI colour, adjust contrast/colour balance/brightness,
 
 ## Installation
 
+### From PyPI
+
+```shell
+# Minimal install:
+pip install image2ascii
+# Install with [WSGI](https://wsgi.readthedocs.io/en/latest/) capabilities:
+pip install image2ascii[www]
+```
+
+### From source
+
 ```shell
 # You do use virtual envs, right?
 python3 -m venv .venv
@@ -19,24 +30,37 @@ source .venv/bin/activate
 
 ### CLI
 
-Installation per instructions above creates an `image2ascii` command; run it for more info. Play around with various combinations of `--invert`, `--negative`, `--contrast`, `--brightness`, and `--color-balance`, until the results are to your liking. `--crop` is also highly recommended.
+Installation per instructions above creates an `image2ascii` command; run it for more info. Play around with various combinations of `--invert`, `--negative`, `--contrast`, `--brightness`, and `--color-balance`, until the results are to your liking. `--color` and `--crop` are also highly recommended.
 
-### HTML
+### WSGI
 
-This is the simplest possible way to render HTML:
+Image2ASCII can run as a simple WSGI application, courtesy of Flask. Just make sure you have installed it with the necessary extra requirements, either by running `pip install image2ascii[www]` or manually installing `Flask` and `requests`.
 
-```python
-from image2ascii.core import Image2ASCII
-from image2ascii.output import HTMLFormatter
+Installation via `pip install image2ascii[www]` will also create an `image2ascii_testserver` command with an optional port number argument (default is port 8000). Use it to fire up a basic web server on localhost and try it out. (Executing `wsgi.py` directly from the command line achieves the same thing.)
 
-print(Image2ASCII("image.png", HTMLFormatter).render())
+Here is a suggested (albeit untested) [Supervisor](http://supervisord.org/) setup:
+
+`/etc/supervisor/conf.d/image2ascii.ini`:
+```ini
+[program:image2ascii]
+directory = /path/to/image2ascii
+command = /path/to/image2ascii/.venv/bin/uwsgi --ini config.ini
 ```
 
-But you are a highly cultured individual who shouldn't settle for that sad and pathetic baseline. Check out the `Image2ASCII` class for more options.
+`/path/to/image2ascii/config.ini`:
+```ini
+[uwsgi]
+module = image2ascii.wsgi:application
+master = true
+processes = 5
+socket = /tmp/image2ascii.sock
+chmod-socket = 666
+vacuum = true
+```
 
-## Everything you never wanted to know
+## Everything else
 
-This project is totally in beta and makes no guarantees for anything whatsoever.
+This project is totally in beta, and so its API should not be considered stable.
 
 Shouts out to:
 * [Pillow](https://python-pillow.org/)

@@ -1,10 +1,14 @@
+#!/usr/bin/env python3
+
 import io
+import sys
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, Dict, Optional
+from wsgiref.simple_server import make_server
 
 import requests
-from flask import Flask, jsonify, make_response, render_template, request, Request
+from flask import Flask, Request, jsonify, make_response, render_template, request
 
 from image2ascii.color import HTMLANSIColorConverter, HTMLFullRGBColorConverter
 from image2ascii.core import Image2ASCII
@@ -142,3 +146,23 @@ def post():
         return response
     except Exception as e:
         return jsonify(error=str(e))
+
+
+def testserver():
+    port = 8000
+
+    if len(sys.argv) > 1:
+        port = int(sys.argv[1])
+
+    httpd = make_server("localhost", port, application)
+
+    print(f"Listening on http://localhost:{port}; press Ctrl-C to break.")
+
+    if len(sys.argv) <= 1:
+        print("To use another port, run this command with that port number as only argument.")
+
+    httpd.serve_forever()
+
+
+if __name__ == "__main__":
+    testserver()

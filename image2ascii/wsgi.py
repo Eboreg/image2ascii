@@ -4,8 +4,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import requests
-from flask import Flask, jsonify, make_response, render_template, request
-from werkzeug.wrappers import Request
+from flask import Flask, jsonify, make_response, render_template, request, Request
 
 from image2ascii.color import HTMLANSIColorConverter, HTMLFullRGBColorConverter
 from image2ascii.core import Image2ASCII

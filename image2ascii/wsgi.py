@@ -11,6 +11,7 @@ from image2ascii.color import HTMLANSIColorConverter, HTMLFullRGBColorConverter
 from image2ascii.core import Image2ASCII
 from image2ascii.db import Session, ShelfDB
 from image2ascii.output import HTMLFormatter
+from image2ascii.utils import shorten_string
 
 ASCII_MAX_HEIGHT = 150
 FLAG_DIR = Path(__file__).parent / "flags"
@@ -36,8 +37,8 @@ def get_i2a(request: Request, i2a: Optional[Image2ASCII]) -> Image2ASCII:
     if image is None and image_url is not None:
         try:
             response = requests.get(image_url, timeout=5.0)
-        except Exception:
-            raise ValueError("Could not fetch image file -- possibly timeout.")
+        except Exception as e:
+            raise ValueError(f"Could not fetch image file: {shorten_string(str(e), 200)}")
         if response.status_code != 200 or not isinstance(response.content, bytes) or not len(response.content):
             raise ValueError("Could not fetch image file.")
         image = io.BytesIO(response.content)
@@ -139,4 +140,4 @@ def post():
         DB.save_session(session)
         return response
     except Exception as e:
-        return jsonify(output=str(e))
+        return jsonify(error=str(e))

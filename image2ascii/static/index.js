@@ -2,26 +2,49 @@ window.onload = () => {
     var form = document.querySelector("#form");
     var isSubmitting = false;
 
+    function showToast(bgClass, text, autohide=true) {
+        // bgClass = e.g. "bg-primary", "bg-danger"
+        // text will be shortened to max 200 chars (+ ellipsis)
+        if (text.length > 200)
+            text = text.slice(0, 200) + " ...";
+        var toastElem = document.querySelector("#toast-template>.toast").cloneNode(true);
+        toastElem.classList.add(bgClass);
+        toastElem.querySelector(".toast-body").textContent = text;
+        document.querySelector("#toast-container").append(toastElem);
+        var toast = new bootstrap.Toast(toastElem, {autohide: autohide});
+        toast.show();
+        return toast;
+    }
+
     function onRangeChanged(elem, value) {
         // Updates legend at the side of range input
         document.querySelector("#" + elem.id + "-value").textContent = Number(value).toPrecision(2);
     }
 
-    function submitForm() {
+    function submitForm(filename) {
         if (!isSubmitting) {
             isSubmitting = true;
-            document.querySelector("#output").innerHTML = "Processing ..."
-            var req = new XMLHttpRequest();
             document.querySelector("#submit").disabled = true;
+            var toastText = "Updating ...";
+            if (filename) toastText = "Processing " + filename + " ...";
+            var toast = showToast("bg-primary", toastText, false);
+            var req = new XMLHttpRequest();
             req.onload = () => {
-                var response = JSON.parse(req.response)
-                document.querySelector("#output").innerHTML = response.output;
-                document.querySelector("#result-box").style.display = "block";
+                var response = JSON.parse(req.response);
+                if (response.error) {
+                    showToast("bg-danger", response.error);
+                } else {
+                    document.querySelector("#output").innerHTML = response.output;
+                    document.querySelector("#result-box").style.display = "block";
+                }
                 document.querySelector("#submit").disabled = false;
                 isSubmitting = false;
+                toast.hide();
             };
             req.open("post", form.action);
             req.send(new FormData(form));
+        } else {
+            showToast("bg-secondary", "I'm busy processing another image. Don't get your knickers in a twist!");
         }
     }
 
@@ -43,7 +66,8 @@ window.onload = () => {
         if (event.target.value) {
             document.querySelector("#flag").value = "";
             document.querySelector("#image-url").value = "";
-            submitForm();
+            var arr = event.target.value.split("\\");
+            submitForm(arr[arr.length - 1]);
         }
     })
 
@@ -52,7 +76,8 @@ window.onload = () => {
         if (event.target.value) {
             document.querySelector("#flag").value = "";
             document.querySelector("#image").value = "";
-            submitForm();
+            var arr = event.target.value.split("/");
+            submitForm(arr[arr.length - 1]);
         }
     })
 
@@ -63,10 +88,12 @@ window.onload = () => {
             ["#color", "#fill-all", "#full-rgb"].forEach(id => {
                 document.querySelector(id).checked = true;
             });
-            document.querySelector("#crop").checked = false;
+            ["#invert", "#negative", "#crop"].forEach(id => {
+                document.querySelector(id).checked = false;
+            })
             document.querySelector("#image").value = "";
             document.querySelector("#image-url").value = "";
-            submitForm();
+            submitForm(event.target.value);
         }
     });
 

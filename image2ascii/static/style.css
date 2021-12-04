@@ -59,5 +59,41 @@ pre {
     background-color: white;
     opacity: .3;
     display: none;
+    z-index: 20;
+}
+
+.alert {
+    overflow: hidden;
+    transition: all 0.3s;
+}
+
+.alert.show {
+    opacity: 1;
+}
+
+.alert:not(.show) {
+    padding-top: 0;
+    padding-bottom: 0;
+    border-top: 0;
+    border-bottom: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    height: 0;
+    opacity: 0;
+}
+
+.toast-container {
     z-index: 10;
+}
+
+.toast {
+    width: 600px;
+}
+
+.pointing-hand {
+    height: 25px;
+}
+
+.pointing-hand.mirrored {
+    transform: scaleX(-1);
 }

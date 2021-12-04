@@ -10,6 +10,13 @@ timings: List[Tuple[str, float]] = []
 timing_enabled = False
 
 
+def shorten_string(string: str, max_length: int) -> str:
+    """max_length is excluding trailing ellipsis."""
+    if len(string) > max_length:
+        return string[:max_length] + " ..."
+    return string
+
+
 def timer(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):

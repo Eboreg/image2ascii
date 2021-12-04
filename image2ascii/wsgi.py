@@ -112,7 +112,9 @@ def get_context(session: Session) -> dict:
     return context
 
 
-def get_session(id: str) -> Session:
+def get_session(id: Optional[str]) -> Session:
+    if id is None:
+        return Session()
     try:
         return DB.get_session(id)
     except KeyError:
@@ -121,7 +123,7 @@ def get_session(id: str) -> Session:
 
 @application.route("/")
 def index():
-    session = get_session(request.cookies["session_id"])
+    session = get_session(request.cookies.get("session_id"))
     context = get_context(session)
     DB.save_session(session)
     response = make_response(render_template("index.html", **context))
@@ -132,7 +134,7 @@ def index():
 
 @application.route("/post", methods=["POST"])
 def post():
-    session = get_session(request.cookies["session_id"])
+    session = get_session(request.cookies.get("session_id"))
     try:
         i2a = get_i2a(request, session.i2a)
         session.i2a = i2a

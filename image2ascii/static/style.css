@@ -37,19 +37,7 @@ pre {
 .box {
     position: relative;
     padding: 1rem;
-}
-
-.box,
-.box-label {
     border: 1px solid var(--bs-secondary);
-}
-
-.box-label {
-    position: absolute;
-    top: -.75rem;
-    margin-left: -.25rem;
-    padding: 0 .25rem;
-    background-color: var(--bs-dark);
 }
 
 .drop-overlay {

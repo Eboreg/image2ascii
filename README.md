@@ -43,4 +43,4 @@ Shouts out to:
 * [Matplotlib](https://matplotlib.org/)
 * [Colorama](https://github.com/tartley/colorama)
 * [Numpy](https://numpy.org/)
-* [Werkzeug](https://werkzeug.palletsprojects.com/)
+* [Flask](https://flask.palletsprojects.com/)

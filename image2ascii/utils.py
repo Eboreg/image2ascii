@@ -42,6 +42,12 @@ def summarize_timing():
 
 
 def fetch_flags():
+    """
+    Flags are included in the project, this function only has to be run if
+    they need to be updated for some reason (perhaps Republika Srpska will
+    become independent?). For this reason, BeautifulSoup is not part of this
+    project's requirements.
+    """
     import requests
     from bs4 import BeautifulSoup
 

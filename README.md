@@ -13,7 +13,7 @@ It can also crop, output ANSI colour, adjust contrast/colour balance/brightness,
 ```shell
 # Minimal install:
 pip install image2ascii
-# Install with [WSGI](https://wsgi.readthedocs.io/en/latest/) capabilities:
+# Install with WSGI capabilities (see below):
 pip install image2ascii[www]
 ```
 
@@ -36,7 +36,7 @@ Installation per instructions above creates an `image2ascii` command; run it for
 
 Image2ASCII can run as a simple WSGI application, courtesy of Flask. Just make sure you have installed it with the necessary extra requirements, either by running `pip install image2ascii[www]` or manually installing `Flask` and `requests`.
 
-Installation via `pip install image2ascii[www]` will also create an `image2ascii_testserver` command with an optional port number argument (default is port 8000). Use it to fire up a basic web server on localhost and try it out. (Executing `wsgi.py` directly from the command line achieves the same thing.)
+Installation via `pip` will also create an `image2ascii_testserver` command with an optional port number argument (default is port 8000). Use it to fire up a basic web server on localhost and try it out. (Executing `wsgi.py` directly from the command line achieves the same thing.)
 
 Here is a suggested (albeit untested) [Supervisor](http://supervisord.org/) setup:
 

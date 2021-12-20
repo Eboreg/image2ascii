@@ -153,7 +153,7 @@ class ANSIColorConverter(BaseColorConverter):
             ((767 - rmean) * np.power(self.color_matrix[:, B] - color[B], 2) >> 8)
         )
 
-        return self.colors[np.argmin(distances)].source.array
+        return np.array(self.colors[np.argmin(distances)].source.array, dtype=np.uint8)
 
     @timer
     def to_representation(self, array: np.ndarray) -> str:
@@ -173,7 +173,7 @@ class HTMLANSIColorConverter(ANSIColorConverter):
 
 class HTMLFullRGBColorConverter(BaseColorConverter):
     def closest(self, array: np.ndarray) -> np.ndarray:
-        return array
+        return np.array(array, dtype=np.uint8)
 
     def to_representation(self, array: np.ndarray) -> str:
         return to_css(array)

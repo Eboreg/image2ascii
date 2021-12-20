@@ -2,6 +2,9 @@ window.onload = () => {
     var form = document.querySelector("#form");
     var isSubmitting = false;
 
+
+    /** UTILITY FUNCTIONS ****************************************************/
+
     function showToast(bgClass, text, autohide=true) {
         // bgClass = e.g. "bg-primary", "bg-danger"
         // text will be shortened to max 200 chars (+ ellipsis)
@@ -16,50 +19,98 @@ window.onload = () => {
         return toast;
     }
 
-    function onRangeChanged(elem, value) {
-        // Updates legend at the side of range input
-        document.querySelector("#" + elem.id + "-value").textContent = Number(value).toPrecision(2);
+    function formdataToObject() {
+        var obj = {};
+        [
+            "uuid", "flag", "color", "crop", "invert", "negative", "fill-all",
+            "full-rgb", "contrast", "brightness", "color-balance"
+        ].forEach(fieldname => {
+            var field = document.getElementById(fieldname);
+            if (field.type == "checkbox") obj[fieldname] = field.checked;
+            else obj[fieldname] = field.value;
+        });
+        return obj;
     }
 
-    function submitForm(filename) {
+    function submitForm(filename, pushState=true) {
         if (!isSubmitting) {
             isSubmitting = true;
             document.querySelector("#submit").disabled = true;
             var toastText = "Updating ...";
             if (filename) toastText = "Processing " + filename + " ...";
             var toast = showToast("bg-primary", toastText, false);
+            var formdata = new FormData(form);
             var req = new XMLHttpRequest();
             req.onload = () => {
                 var response = JSON.parse(req.response);
                 if (response.error) {
                     showToast("bg-danger", response.error);
                 } else {
+                    document.querySelector("#uuid").value = response.uuid;
                     document.querySelector("#output").innerHTML = response.output;
                     document.querySelector("#result-box").style.display = "block";
+                    if (pushState && typeof response.uuid != "undefined") {
+                        var url = new URL(window.location);
+                        url.searchParams.set("uuid", response.uuid);
+                        if (window.location != url.href)
+                            window.history.pushState(formdataToObject(), "", url);
+                    }
                 }
                 document.querySelector("#submit").disabled = false;
+                // Unset image & image-url to avoid unnecessary future fetches
+                document.querySelector("#image-url").value = "";
+                document.querySelector("#image").value = "";
                 isSubmitting = false;
                 toast.hide();
             };
             req.open("post", form.action);
-            req.send(new FormData(form));
+            req.send(formdata);
         } else {
             showToast("bg-secondary", "I'm busy processing another image. Don't get your knickers in a twist!");
         }
     }
 
+
+    /** BROWSER STATE ********************************************************/
+
+    window.addEventListener("popstate", event => {
+        if (event && event.state && Object.keys(event.state).length > 0) {
+            [
+                "uuid", "flag", "color", "crop", "invert", "negative", "fill-all",
+                "full-rgb", "contrast", "brightness", "color-balance"
+            ].forEach(fieldname => {
+                var field = document.getElementById(fieldname);
+                if (field.type == "checkbox") {
+                    field.checked = event.state[fieldname];
+                } else {
+                    field.value = event.state[fieldname];
+                }
+                field.dispatchEvent(new Event("input"));
+            });
+            submitForm(null, false);
+        }
+    });
+
+
+    /** FORM EVENT LISTENERS *************************************************/
+
     document.querySelector("#color").addEventListener("input", event => {
         // If not color, then fill-all and full-rgb make no sense
         document.querySelector("#fill-all").disabled = !event.target.checked;
         document.querySelector("#full-rgb").disabled = !event.target.checked;
-    })
+    });
+
+    function onRangeChanged(elem, value) {
+        // Updates legend at the side of range input
+        document.querySelector("#" + elem.id + "-value").textContent = Number(value).toPrecision(2);
+    }
 
     document.querySelectorAll("input[type=range]").forEach(elem => {
         // Update range legends on user input
         elem.addEventListener("input", event => {
             onRangeChanged(elem, event.target.value);
         })
-    })
+    });
 
     document.querySelector("#image").addEventListener("input", event => {
         // When image is selected, unset flag & image-url field and submit
@@ -69,7 +120,7 @@ window.onload = () => {
             var arr = event.target.value.split("\\");
             submitForm(arr[arr.length - 1]);
         }
-    })
+    });
 
     document.querySelector("#image-url").addEventListener("input", event => {
         // When image-url is set, unset flag & image field and submit
@@ -79,7 +130,7 @@ window.onload = () => {
             var arr = event.target.value.split("/");
             submitForm(arr[arr.length - 1]);
         }
-    })
+    });
 
     document.querySelector("#flag").addEventListener("input", event => {
         // When flag is selected, set some sensible default values,
@@ -112,6 +163,14 @@ window.onload = () => {
             onRangeChanged(elem, 1.0);
         });
     });
+
+    form.addEventListener("submit", event => {
+        event.preventDefault();
+        submitForm();
+    });
+
+
+    /** DRAG & DROP **********************************************************/
 
     var dropOverlay = document.querySelector(".drop-overlay");
 
@@ -155,10 +214,8 @@ window.onload = () => {
         }
     });
 
-    form.addEventListener("submit", event => {
-        event.preventDefault();
-        submitForm();
-    });
+
+    /** PASTING **************************************************************/
 
     document.addEventListener("paste", async event => {
         // Handle pasted images

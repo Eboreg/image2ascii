@@ -1,4 +1,4 @@
-# image2ascii
+# Image2ASCII
 
 Converts images to ASCII, with a twist; it traces edges in the image and attempts to render them with suitably formed characters, à la good old handmade ASCII art:
 
@@ -36,6 +36,8 @@ Installation per instructions above creates an `image2ascii` command; run it for
 
 Image2ASCII can run as a simple WSGI application, courtesy of Flask. Just make sure you have installed it with the necessary extra requirements, either by running `pip install image2ascii[www]` or manually installing `Flask` and `requests`.
 
+For this purpose, a fully working web implementation is also included. Not only does it leverage Image2ASCII's various features, it also enables drag-and-drop and pasting of images, and includes [all sovereign state flags](https://en.wikipedia.org/wiki/Gallery_of_sovereign_state_flags) from Wikipedia for the user to choose from. A live version is (at the time of writing) available [here](https://image2ascii.azurewebsites.net/).
+
 Installation via `pip` will also create an `image2ascii_testserver` command with an optional port number argument (default is port 8000). Use it to fire up a basic web server on localhost and try it out. (Executing `wsgi.py` directly from the command line achieves the same thing.)
 
 Here is a suggested (albeit untested) [Supervisor](http://supervisord.org/) setup:
@@ -57,6 +59,22 @@ socket = /tmp/image2ascii.sock
 chmod-socket = 666
 vacuum = true
 ```
+
+## Configuration
+
+The CLI looks for config files in these locations, by order of priority:
+
+* Path set via `--config` parameter
+* `~/.image2ascii`
+* `defaults.conf` in application directory (i.e. the directory where `config.py` is located)
+
+The WSGI application looks for these config files, by order of priority:
+
+* `web_defaults.conf` in application directory (a default one is included)
+* `~/.image2ascii`
+* `defaults.conf` in application directory
+
+Config files follow a normal INI file structure (`key=value`). For available keys, refer to `config.py` (more specifically: `config.Config._fields`).
 
 ## Everything else
 

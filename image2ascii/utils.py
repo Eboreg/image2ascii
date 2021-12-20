@@ -1,6 +1,7 @@
 import functools
 import re
 import time
+from importlib import import_module
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -8,6 +9,21 @@ from image2ascii import __version__
 
 timings: List[Tuple[str, float]] = []
 timing_enabled = False
+
+
+def import_string(dotted_path):
+    # Stolen from Django
+    try:
+        module_path, class_name = dotted_path.rsplit('.', 1)
+    except ValueError as err:
+        raise ImportError("%s doesn't look like a module path" % dotted_path) from err
+    module = import_module(module_path)
+
+    try:
+        return getattr(module, class_name)
+    except AttributeError as err:
+        raise ImportError(
+            "Module '%s' does not define a '%s' attribute/class" % (module_path, class_name)) from err
 
 
 def shorten_string(string: str, max_length: int) -> str:

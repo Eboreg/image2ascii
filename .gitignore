@@ -10,7 +10,7 @@ config.ini
 **/*.xcf
 *.csv
 **/notes.txt
-/shelf*
+defaults.conf
 /image2ascii_db*
 
 # Elastic Beanstalk Files

@@ -38,13 +38,16 @@ class Output:
 class BaseFormatter:
     name: str
     br = "\n"
-    color_converter: BaseColorConverter
+    color_converter: Optional[BaseColorConverter]
     color_converter_class: Type[BaseColorConverter]
 
-    def __init__(self, color_converter_class: Optional[Type[BaseColorConverter]] = None):
-        if color_converter_class is not None:
-            self.color_converter_class = color_converter_class
-        self.color_converter = self.color_converter_class()
+    def __init__(self, color_converter_class: Optional[Type[BaseColorConverter]]):
+        if color_converter_class:
+            self.color_converter = color_converter_class()
+        elif hasattr(self, "color_converter_class"):
+            self.color_converter = self.color_converter_class()
+        else:
+            self.color_converter = None
 
     @timer
     def render(self, output: Output) -> str:
@@ -54,14 +57,14 @@ class BaseFormatter:
             if row_idx > 0:
                 ret += self.br
             for col_idx, char in enumerate(row):
-                if (col_idx, row_idx) in output.colors:
-                    ret += self.render_color(output.colors[(col_idx, row_idx)])
+                if self.color_converter and (col_idx, row_idx) in output.colors:
+                    ret += self.render_color(self.color_converter, output.colors[(col_idx, row_idx)])
                 ret += char
         return ret
 
     @timer
-    def render_color(self, color: np.ndarray) -> str:
-        return self.color_converter.to_representation(color)
+    def render_color(self, color_converter: BaseColorConverter, color: np.ndarray) -> str:
+        return color_converter.to_representation(color)
 
 
 class ANSIFormatter(BaseFormatter):
@@ -87,10 +90,10 @@ class HTMLFormatter(BaseFormatter):
         return ret
 
     @timer
-    def render_color(self, color: np.ndarray) -> str:
+    def render_color(self, color_converter: BaseColorConverter, color: np.ndarray) -> str:
         output = ""
         if self.open_span:
             output += "</span>"
-        output += f"<span style=\"color:{self.color_converter.to_representation(color)}\">"
+        output += f"<span style=\"color:{color_converter.to_representation(color)}\">"
         self.open_span = True
         return output

@@ -30,7 +30,7 @@ def test():
     print(i2a.render())
     assert i2a.output is not None
 
-    i2a.size_settings(ascii_width=60, crop=True)
+    i2a.size_settings(width=60, crop=True)
     assert i2a.output is None
     # Should be cropped and 60 chars wide
     print(i2a.render())
@@ -42,7 +42,7 @@ def test():
     print(i2a.render())
     assert i2a.output is not None
 
-    i2a.size_settings(ascii_width=80)
+    i2a.size_settings(width=80)
     i2a.quality_settings(quality=5)
     assert i2a.output is None
     # Should still be cropped but 80 chars wide and more detail

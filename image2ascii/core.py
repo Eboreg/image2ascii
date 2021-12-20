@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 
-from typing import List, Optional, Tuple, Type
+from typing import List, Optional, Tuple
 
 import numpy as np
 from PIL import Image, ImageEnhance, ImageOps
 
-from image2ascii import (
-    DEFAULT_ASCII_RATIO, DEFAULT_ASCII_WIDTH, DEFAULT_MIN_LIKENESS, DEFAULT_QUALITY, EMPTY_CHARACTER, FILLED_CHARACTER,
-)
 from image2ascii.color import BaseColorConverter
+from image2ascii.config import Config, ConfigListener
 from image2ascii.geometry import BaseShape, CropBox, EmptyShape, FilledShape, PolygonShape
-from image2ascii.output import ANSIFormatter, BaseFormatter, Output
+from image2ascii.output import Output
 from image2ascii.utils import timer
 
 # Mnemonics for colour array indices
@@ -18,23 +16,12 @@ from image2ascii.utils import timer
 # H, S, and Va are currently not used, though.
 R, G, B, A, Vi, H, S, Va = range(8)
 
+EMPTY_CHARACTER = " "
+FILLED_CHARACTER = "$"
 
-class Image2ASCII:
-    _ascii_max_height: Optional[int] = None
-    _ascii_ratio: float = DEFAULT_ASCII_RATIO
-    _ascii_width: int = DEFAULT_ASCII_WIDTH
-    _brightness: float = 1.0
-    _color: bool = False
-    _color_balance: float = 1.0
-    _color_converter_class: Optional[Type[BaseColorConverter]] = None
-    _contrast: float = 1.0
-    _crop: bool = False
-    _fill_all: bool = False
-    _formatter_class: Type[BaseFormatter] = ANSIFormatter
-    _invert: bool = False
-    _min_likeness: float = DEFAULT_MIN_LIKENESS
-    _negative: bool = False
-    _quality: int = DEFAULT_QUALITY
+
+class Image2ASCII(ConfigListener):
+    _config: Config
 
     image: Optional[Image.Image] = None
     output: Optional[Output] = None
@@ -44,168 +31,31 @@ class Image2ASCII:
     def __init__(
         self,
         file=None,
-        formatter_class: Optional[Type[BaseFormatter]] = None,
-        color_converter_class: Optional[Type[BaseColorConverter]] = None,
+        config: Optional[Config] = None,
     ):
+        if config is None:
+            config = Config.from_default_files()
+        config.add_listener(self)
+        self._config = config
         if file is not None:
             self.load(file)
-        if formatter_class is not None:
-            self.formatter_class = formatter_class
-        if color_converter_class is not None:
-            self.color_converter_class = color_converter_class
+
+    def __hash__(self) -> int:
+        return hash(self.image)
+
+    @classmethod
+    def reconstruct(cls, image: Image.Image, config: Config):
+        """Reconstruct an object from data saved in DB"""
+        i2a = cls(config=config)
+        i2a.image = image
+        return i2a
 
     """
     PROPERTIES
     """
     @property
-    def ascii_max_height(self) -> Optional[int]:
-        return self._ascii_max_height
-
-    @ascii_max_height.setter
-    def ascii_max_height(self, value: Optional[int]):
-        if value != self._ascii_max_height:
-            self._ascii_max_height = value
-            self.reset()
-
-    @property
-    def ascii_ratio(self) -> float:
-        return self._ascii_ratio
-
-    @ascii_ratio.setter
-    def ascii_ratio(self, value: float):
-        if value != self._ascii_ratio:
-            self._ascii_ratio = value
-            self.reset()
-
-    @property
-    def ascii_width(self) -> int:
-        return self._ascii_width
-
-    @ascii_width.setter
-    def ascii_width(self, value: int):
-        if value != self._ascii_width:
-            self._ascii_width = value
-            self.reset()
-
-    @property
-    def brightness(self) -> float:
-        return self._brightness
-
-    @brightness.setter
-    def brightness(self, value: float):
-        if value != self._brightness:
-            self._brightness = value
-            self.reset()
-
-    @property
-    def color(self) -> bool:
-        return self._color
-
-    @color.setter
-    def color(self, value: bool):
-        if value != self._color:
-            self._color = value
-            self.reset()
-
-    @property
-    def color_balance(self) -> float:
-        return self._color_balance
-
-    @color_balance.setter
-    def color_balance(self, value: float):
-        if value != self._color_balance:
-            self._color_balance = value
-            self.reset()
-
-    @property
-    def color_converter_class(self) -> Optional[Type[BaseColorConverter]]:
-        return self._color_converter_class
-
-    @color_converter_class.setter
-    def color_converter_class(self, value: Type[BaseColorConverter]):
-        if value != self._color_converter_class:
-            self._color_converter_class = value
-            self.reset()
-
-    @property
-    def contrast(self) -> float:
-        return self._contrast
-
-    @contrast.setter
-    def contrast(self, value: float):
-        if value != self._contrast:
-            self._contrast = value
-            self.reset()
-
-    @property
-    def crop(self) -> bool:
-        return self._crop
-
-    @crop.setter
-    def crop(self, value: bool):
-        if value != self._crop:
-            self._crop = value
-            self.reset()
-
-    @property
-    def fill_all(self) -> bool:
-        return self._fill_all
-
-    @fill_all.setter
-    def fill_all(self, value: bool):
-        if value != self._fill_all:
-            self._fill_all = value
-            self.reset()
-
-    @property
-    def formatter_class(self) -> Type[BaseFormatter]:
-        return self._formatter_class
-
-    @formatter_class.setter
-    def formatter_class(self, value: Type[BaseFormatter]):
-        if value != self._formatter_class:
-            self._formatter_class = value
-            self.reset()
-
-    @property
-    def invert(self) -> bool:
-        return self._invert
-
-    @invert.setter
-    def invert(self, value: bool):
-        if value != self._invert:
-            self._invert = value
-            self.reset()
-
-    @property
-    def negative(self) -> bool:
-        return self._negative
-
-    @negative.setter
-    def negative(self, value: bool):
-        if value != self._negative:
-            self._negative = value
-            self.reset()
-
-    @property
-    def min_likeness(self) -> float:
-        return self._min_likeness
-
-    @min_likeness.setter
-    def min_likeness(self, value: float):
-        if value != self._min_likeness:
-            self._min_likeness = value
-            self.reset()
-
-    @property
-    def quality(self) -> int:
-        return self._quality
-
-    @quality.setter
-    def quality(self, value: int):
-        if value != self._quality:
-            self._quality = value
-            self.reset()
+    def config(self) -> Config:
+        return self._config
 
     """
     CONVENIENCE SETTINGS METHODS
@@ -218,13 +68,13 @@ class Image2ASCII:
         fill_all: Optional[bool] = None,
     ):
         if color is not None:
-            self.color = color
+            self.config.color = color
         if invert is not None:
-            self.invert = invert
+            self.config.invert = invert
         if negative is not None:
-            self.negative = negative
+            self.config.negative = negative
         if fill_all is not None:
-            self.fill_all = fill_all
+            self.config.fill_all = fill_all
         return self
 
     def enhancement_settings(
@@ -234,51 +84,54 @@ class Image2ASCII:
         color_balance: Optional[float] = None
     ):
         if contrast is not None:
-            self.contrast = contrast
+            self.config.contrast = contrast
         if brightness is not None:
-            self.brightness = brightness
+            self.config.brightness = brightness
         if color_balance is not None:
-            self.color_balance = color_balance
+            self.config.color_balance = color_balance
         return self
 
     def quality_settings(self, quality: Optional[int] = None, min_likeness: Optional[float] = None):
         if quality is not None:
-            self.quality = quality
+            self.config.quality = quality
         if min_likeness is not None:
-            self.min_likeness = min_likeness
+            self.config.min_likeness = min_likeness
         return self
 
     def size_settings(
         self,
-        ascii_max_height: Optional[int] = None,
-        ascii_width: Optional[int] = None,
-        ascii_ratio: Optional[float] = None,
+        max_height: Optional[int] = None,
+        width: Optional[int] = None,
+        ratio: Optional[float] = None,
         crop: Optional[bool] = None
     ):
         """
-        To explicitly set self.ascii_max_height to None, if it has previously
-        been set to something else, do `i2a.ascii_max_height = None` instead.
+        To explicitly set max height to None, if it has previously been set to
+        something else, do `i2a.config.max_height = None` instead.
         """
-        if ascii_max_height is not None:
-            self.ascii_max_height = ascii_max_height
-        if ascii_width is not None:
-            self.ascii_width = ascii_width
-        if ascii_ratio is not None:
-            self.ascii_ratio = ascii_ratio
+        if max_height is not None:
+            self.config.max_height = max_height
+        if width is not None:
+            self.config.width = width
+        if ratio is not None:
+            self.config.ratio = ratio
         if crop is not None:
-            self.crop = crop
+            self.config.crop = crop
         return self
 
     """
     THE REST OF THE JAZZ
     """
+    def config_changed(self, key, value):
+        self.reset()
+
     @timer
     def do_crop(self, image: Image.Image, matrix: np.ndarray) -> Tuple[Image.Image, bool]:
         """
         `image` does not necessarily have the same dimensions as `matrix`, so
         we transpose the cropbox before doing the actual cropping.
         """
-        if self.crop:
+        if self.config.crop:
             ratio = image.height / matrix.shape[0]
             cropbox = self.get_crop_box(matrix)
             if cropbox != CropBox(0, 0, matrix.shape[1], matrix.shape[0]):
@@ -289,12 +142,12 @@ class Image2ASCII:
 
     @timer
     def do_enhance(self, image: Image.Image) -> Image.Image:
-        if self.contrast != 1.0:
-            image = ImageEnhance.Contrast(image).enhance(self.contrast)
-        if self.brightness != 1.0:
-            image = ImageEnhance.Brightness(image).enhance(self.brightness)
-        if self.color_balance != 1.0:
-            image = ImageEnhance.Color(image).enhance(self.color_balance)
+        if self.config.contrast != 1.0:
+            image = ImageEnhance.Contrast(image).enhance(self.config.contrast)
+        if self.config.brightness != 1.0:
+            image = ImageEnhance.Brightness(image).enhance(self.config.brightness)
+        if self.config.color_balance != 1.0:
+            image = ImageEnhance.Color(image).enhance(self.config.color_balance)
         return image
 
     @timer
@@ -303,7 +156,7 @@ class Image2ASCII:
         For some reason, PIL.ImageOps.invert() does not support RGBA.
         This implementation leaves the alpha channel as it is.
         """
-        if self.negative:
+        if self.config.negative:
             if image.mode == "RGBA":
                 lut = [i for i in range(0xff, -1, -1)] * 3 + [i for i in range(0xff + 1)]
                 return image.point(lut)
@@ -314,41 +167,42 @@ class Image2ASCII:
     def do_resize(self, image: Image.Image) -> Image.Image:
         """
         Resize image to a multiple of the sizes of the sections it will be
-        divided into, with a width not exceeding (self.ascii_width *
-        self.quality), and a height not exceeding (self.ascii_max_height *
-        self.quality * self.ascii_ratio), in case self.ascii_max_height is not
-        None.
+        divided into, with a width not exceeding (self.config.width *
+        self.config.quality), and a height not exceeding
+        (self.config.max_height * self.config.quality * self.config.ratio), in
+        case self.config.max_height is not None.
 
-        Note: A small value for self.ascii_max_height will not make the output
+        Note: A small value for self.config.max_height will not make the output
         narrower, it will only make it less detailed, as it will decrease the
         size of the source image before processing. It is not intended for
         shrinking the output but to reduce CPU load for very "thin" images.
         """
-        end_width = min(image.width, self.ascii_width * self.quality)
+        end_width = min(image.width, self.config.width * self.config.quality)
 
-        if self.ascii_max_height is not None:
-            max_height = round(self.ascii_max_height * self.quality * self.ascii_ratio)
-            if (image.height * self.ascii_ratio * (end_width / image.width)) > max_height:
+        if self.config.max_height is not None:
+            max_height = round(self.config.max_height * self.config.quality * self.config.ratio)
+            if (image.height * self.config.ratio * (end_width / image.width)) > max_height:
                 # Image is still too tall after adjusting width; decrease
                 # end width so end height == max height
-                end_width = round(image.width * (max_height / image.height) / self.ascii_ratio)
+                end_width = round(image.width * (max_height / image.height) / self.config.ratio)
 
-        # Round to the nearest multiple of self.ascii_width if needed
-        if end_width % self.ascii_width:
-            if end_width > self.ascii_width and end_width % self.ascii_width < self.ascii_width * 0.25:
-                # We're over self.ascii_width and arbitrarily close to the
+        # Round to the nearest multiple of self.config.width if needed
+        if end_width % self.config.width:
+            if end_width > self.config.width and \
+                    end_width % self.config.width < self.config.width * 0.25:
+                # We're over self.config.width and arbitrarily close to the
                 # multiple below; shrink
-                end_width -= end_width % self.ascii_width
+                end_width -= end_width % self.config.width
             else:
                 # Otherwise, grow
-                end_width += self.ascii_width - end_width % self.ascii_width
+                end_width += self.config.width - end_width % self.config.width
 
         if image.width != end_width:
             image = image.resize((end_width, round((end_width / image.width) * image.height)), resample=Image.NEAREST)
 
         # Each character will represent an image section this large
-        section_width = int(image.width / self.ascii_width) or 1
-        section_height = int(section_width * self.ascii_ratio) or 1
+        section_width = int(image.width / self.config.width) or 1
+        section_height = int(section_width * self.config.ratio) or 1
 
         # If image height is not an exact multiple of section heights, expand
         # it vertically so it becomes so.
@@ -370,7 +224,7 @@ class Image2ASCII:
 
         for shape in self.shapes:
             likeness = shape.likeness(nonzero_coords)
-            if likeness > self.min_likeness:
+            if likeness > self.config.min_likeness:
                 return shape.char
             chars.append((shape.char, likeness))
         return max(chars, key=lambda c: c[1])[0]
@@ -400,11 +254,12 @@ class Image2ASCII:
     @timer
     def get_matrix(self, image: Image.Image):
         """
-        If self.fill_all: Only transparent pixels (more precisely: those with
-            alpha < 0x80) will be considered unfilled. Otherwise,
+        If self.config.fill_all: Only transparent pixels (more precisely:
+            those with alpha < 0x80) will be considered unfilled. Otherwise,
             filled/unfilled status will be a result of transparency AND
             whatever a conversion to monochrome spits out.
-        If self.invert: Reverses the filled/unfilled status for all pixels.
+        If self.config.invert: Reverses the filled/unfilled status for all
+            pixels.
         Returns: 3-d array with shape = (image height, image width, 5), where
             the last axis contains the following values for each pixel:
             (red, green, blue, alpha, visibility)
@@ -423,7 +278,7 @@ class Image2ASCII:
         # arr[:, H:Va + 1] = rgb_to_hsv(arr[:, :B + 1])
 
         # Now to find the Vi (visibility) values:
-        if self.fill_all:
+        if self.config.fill_all:
             # All chars are visible except transparent (A < 0x80) ones:
             arr[:, Vi] = arr[:, A] >= 0x80
         else:
@@ -432,28 +287,29 @@ class Image2ASCII:
             perceived_brightness = arr[:, R] * 0.299 + arr[:, G] * 0.587 + arr[:, B] * 0.114
 
             # Transparency (A < 0x80) still takes precedence:
-            if not self.invert:
+            if not self.config.invert:
                 arr[:, Vi] = np.all((arr[:, A] >= 0x80, perceived_brightness >= 0x80), axis=0)
             else:
-                # If self.invert, make chars visible that have a perceived
-                # brightness _less_ than 0x80:
+                # If self.config.invert, make chars visible that have a
+                # perceived brightness _less_ than 0x80:
                 arr[:, Vi] = np.all((arr[:, A] >= 0x80, perceived_brightness < 0x80), axis=0)
 
         # Reshape to image.height rows and image.width columns
         return arr.reshape(image.height, image.width, 5)
 
     @timer
-    def get_section_color(self, section: np.ndarray, converter: BaseColorConverter) -> Optional[np.ndarray]:
+    def get_section_color(self, section: np.ndarray, converter: Optional[BaseColorConverter]) -> Optional[np.ndarray]:
         # Generate a 2-d array of colour data for points where V > 0:
-        colors = section[section[:, :, Vi] > 0]
-        if colors.size:
-            color_arr = np.median(colors[:, np.array([R, G, B])], axis=0, out=np.empty(3, dtype=np.uint64))
-            return converter.closest(color_arr)
+        if converter is not None:
+            colors = section[section[:, :, Vi] > 0]
+            if colors.size:
+                color_arr = np.median(colors[:, np.array([R, G, B])], axis=0, out=np.empty(3, dtype=np.uint64))
+                return converter.closest(color_arr)
         return None
 
     def get_section_size(self, image: Image.Image) -> Tuple[int, int]:
-        section_width = int(image.width / self.ascii_width) or 1
-        return section_width, int(section_width * self.ascii_ratio) or 1
+        section_width = int(image.width / self.config.width) or 1
+        return section_width, int(section_width * self.config.ratio) or 1
 
     @timer
     def init_shapes(self, section_width: int, section_height: int):
@@ -486,9 +342,10 @@ class Image2ASCII:
             image.load()
         if image.mode != "RGBA":
             image = image.convert("RGBA")
-        # Downsize original if it's ridiculously large
-        if image.width > 2000 or image.height > 2000:
-            factor = 2000 / max(image.width, image.height)
+        # Downsize original if it's too large
+        # if image.width > 2000 or image.height > 2000:
+        if image.width > self.config.max_original_size or image.height > self.config.max_original_size:
+            factor = self.config.max_original_size / max(image.width, image.height)
             image = image.resize((round(image.width * factor), round(image.height * factor)))
         if image != self.image:
             self.image = image
@@ -507,7 +364,7 @@ class Image2ASCII:
 
         Also, if any cropping was done, we need to do_resize() once again,
         since the cropping probably made the image dimensions unsuitable (i.e.
-        height and/or width not being a multiple of self.quality).
+        height and/or width not being a multiple of self.config.quality).
 
         The actual cropping and resizing takes a miniscule amount of time,
         though, so it's not a real problem.
@@ -541,7 +398,7 @@ class Image2ASCII:
         each section and concatenates them together. Then renders the result
         in the selected format.
         """
-        formatter = self.formatter_class(self.color_converter_class)
+        formatter = self.config.get_formatter()
 
         if self.output is None:
             image, matrix = self.prepare_image()
@@ -553,7 +410,7 @@ class Image2ASCII:
             for start_y in range(0, image.height, section_height):
                 for start_x in range(0, image.width, section_width):
                     section = matrix[start_y:start_y + section_height, start_x:start_x + section_width]
-                    if self.color:
+                    if self.config.color:
                         new_color = self.get_section_color(section, formatter.color_converter)
                         if new_color is not None and (last_color is None or not np.all(new_color == last_color)):
                             self.output.add_color(new_color)

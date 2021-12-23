@@ -1,42 +1,45 @@
+import os
 import shelve
 from datetime import datetime, timedelta
-from typing import Optional, Union
+from pathlib import Path
+from typing import Dict, Optional, Union
 from uuid import uuid4
 
-from PIL.Image import Image
-
 from image2ascii.config import Config
-from image2ascii.core import Image2ASCII
 
 KEEP_DAYS = 7
 
 
-class BaseDBItem:
-    def __init__(self, pk: Union[str, int]):
+class Session:
+    uuid: str
+
+    def __init__(
+        self,
+        uuid: str,
+        filename: Union[str, Path],
+        config: Config,
+        keep_file=False,
+        hash: Optional[int] = None
+    ):
         self.datetime = datetime.now()
-        self.pk = pk
-
-
-class ImageDBItem(BaseDBItem):
-    """Image is identified by hash of its getdata()"""
-    def __init__(self, image: Image):
-        self.image = image
-        super().__init__(hash(tuple(image.getdata())))
-
-
-class SessionDBItem(BaseDBItem):
-    """pk = session uuid"""
-    def __init__(self, pk: str, image_id: Union[str, int], config: Config):
-        self.image_id = image_id
+        self.uuid = uuid
+        self.filename = filename
         self.config = config
-        super().__init__(pk)
+        self.keep_file = keep_file
+        self.hash = hash
 
 
 class BaseDB:
-    def get_i2a(self, uuid: Optional[str]) -> Optional[Image2ASCII]:
+    def get(self, uuid: str) -> Session:
         raise NotImplementedError
 
-    def save_i2a(self, i2a: Image2ASCII, uuid: Optional[str] = None) -> Optional[str]:
+    def get_by_hash(self, hash: int) -> Optional[Session]:
+        raise NotImplementedError
+
+    def create(self, filename: Union[str, Path], config: Config, keep_file=False) -> Session:
+        raise NotImplementedError
+
+    def update(self, uuid: str, config: Config) -> Session:
         raise NotImplementedError
 
     def purge(self):
@@ -49,63 +52,65 @@ class ShelfDB(BaseDB):
         with shelve.open(self.filename) as shelf:
             if "sessions" not in shelf:
                 shelf["sessions"] = {}
-            if "images" not in shelf:
-                shelf["images"] = {}
 
-    def get_i2a(self, uuid: Optional[str]) -> Optional[Image2ASCII]:
-        if uuid:
-            with shelve.open(self.filename) as shelf:
-                if uuid in shelf["sessions"]:
-                    session = shelf["sessions"][uuid]
-                    assert isinstance(session, SessionDBItem)
-                    if session.image_id in shelf["images"]:
-                        image = shelf["images"][session.image_id]
-                        assert isinstance(image, ImageDBItem)
-                        return Image2ASCII.reconstruct(image.image, session.config)
-        return None
+    def get(self, uuid: str) -> Session:
+        """May raise KeyError"""
+        with shelve.open(self.filename) as shelf:
+            return shelf["sessions"][uuid]
 
-    def save_i2a(self, i2a: Image2ASCII, uuid: Optional[str] = None) -> Optional[str]:
-        if i2a.image is not None:
-            uuid = uuid or str(uuid4())
-            image = ImageDBItem(i2a.image)
-            session = SessionDBItem(uuid, image.pk, i2a.config)
-            with shelve.open(self.filename) as shelf:
-                # Grab existing data for manipulation
-                sessions = shelf["sessions"]
-                images = shelf["images"]
+    def get_by_hash(self, hash: int) -> Optional[Session]:
+        with shelve.open(self.filename) as shelf:
+            try:
+                return [s for s in shelf["sessions"].values() if s.hash == hash][0]
+            except IndexError:
+                return None
 
-                if uuid in sessions:
-                    # If config changed, make a new uuid
-                    if sessions[uuid].config != session.config:
-                        uuid = str(uuid4())
-                        session.pk = uuid
-                images[image.pk] = image
-                sessions[session.pk] = session
+    def create(
+        self,
+        filename: Union[str, Path],
+        config: Config,
+        keep_file=False,
+        hash: Optional[int] = None,
+    ) -> Session:
+        session = Session(str(uuid4()), filename, config, keep_file=keep_file, hash=hash)
 
-                # Store stuff back
-                shelf["sessions"] = sessions
-                shelf["images"] = images
+        with shelve.open(self.filename) as shelf:
+            sessions = shelf["sessions"]
+            sessions[session.uuid] = session
+            shelf["sessions"] = sessions
+
         self.purge()
-        return uuid
+        return session
+
+    def update(self, uuid: str, config: Config) -> Session:
+        with shelve.open(self.filename) as shelf:
+            sessions: Dict[str, Session] = shelf["sessions"]
+            # May raise KeyError:
+            session = sessions[uuid]
+            if session.config != config:
+                # If config changed, make a new session with new uuid
+                uuid = str(uuid4())
+                session = Session(uuid, session.filename, config, keep_file=session.keep_file, hash=session.hash)
+                sessions[uuid] = session
+                shelf["sessions"] = sessions
+        self.purge()
+        return session
 
     def purge(self):
         with shelve.open(self.filename) as shelf:
-            # Grab existing data for manipulation
-            sessions = shelf["sessions"]
-            images = shelf["images"]
+            old_files = set([s.filename for s in shelf["sessions"].values() if not s.keep_file])
+            sessions = {}
 
-            # Purge old sessions
-            sessions = {
-                uuid: session for uuid, session in sessions.items()
-                if session.datetime >= (datetime.now() - timedelta(days=KEEP_DAYS))
-            }
-            # Purge images that no longer are referred to by any session, by
-            # replacing the images dict with the ones that still are
-            images = {
-                pk: image for pk, image in images.items()
-                if pk in [session.image_id for session in sessions.values()]
-            }
+            for k, v in shelf["sessions"].items():
+                if v.datetime >= (datetime.now() - timedelta(days=KEEP_DAYS)):
+                    sessions[k] = v
+                    if v.filename in old_files:
+                        old_files.remove(v.filename)
 
-            # Store stuff back
+            for filename in old_files:
+                try:
+                    os.remove(filename)
+                except Exception:
+                    pass
+
             shelf["sessions"] = sessions
-            shelf["images"] = images

@@ -47,13 +47,27 @@ window.onload = () => {
                     showToast("bg-danger", response.error);
                 } else {
                     document.querySelector("#uuid").value = response.uuid;
-                    document.querySelector("#output").innerHTML = response.output;
-                    document.querySelector("#result-box").style.display = "block";
-                    if (pushState && typeof response.uuid != "undefined") {
-                        var url = new URL(window.location);
+                    if (response.output != null) {
+                        document.querySelector("#output").innerHTML = response.output;
+                        document.querySelector("#result-box").classList.remove("d-none");
+                    }
+                    else {
+                        document.querySelector("#result-box").classList.add("d-none");
+                    }
+                    var url = new URL(window.location);
+                    if (typeof response.uuid == "undefined" || response.uuid == null) {
+                        url.searchParams.delete("uuid");
+                    }
+                    else {
                         url.searchParams.set("uuid", response.uuid);
-                        if (window.location != url.href)
+                    }
+                    if (window.location != url.href) {
+                        if (pushState) {
                             window.history.pushState(formdataToObject(), "", url);
+                        }
+                        else {
+                            window.history.replaceState(formdataToObject(), "", url);
+                        }
                     }
                 }
                 document.querySelector("#submit").disabled = false;

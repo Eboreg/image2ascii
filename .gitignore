@@ -12,6 +12,7 @@ config.ini
 **/notes.txt
 defaults.conf
 /image2ascii_db*
+image2ascii/uploads/**
 
 # Elastic Beanstalk Files
 .elasticbeanstalk/*

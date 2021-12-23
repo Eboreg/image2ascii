@@ -170,8 +170,7 @@
 
             <div class="col-12 col-md mt-3 mt-xl-0">
               <div>
-                <div class="box pb-0 d-md-inline-block bg-black" id="result-box" {% if not output %}
-                  style="display:none !important" {% endif %}>
+                <div class="box pb-0 bg-black{% if not output %} d-none{% endif %}" id="result-box">
                   <div id="output" class="mb-3">{{ output|safe }}</div>
                 </div>
               </div>

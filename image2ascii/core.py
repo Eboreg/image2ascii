@@ -43,13 +43,6 @@ class Image2ASCII(ConfigListener):
     def __hash__(self) -> int:
         return hash(self.image)
 
-    @classmethod
-    def reconstruct(cls, image: Image.Image, config: Config):
-        """Reconstruct an object from data saved in DB"""
-        i2a = cls(config=config)
-        i2a.image = image
-        return i2a
-
     """
     PROPERTIES
     """

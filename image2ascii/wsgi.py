@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 
 import io
+import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Optional, Tuple
+from urllib.parse import urlparse
+from uuid import uuid4
 from wsgiref.simple_server import make_server
 
 import requests
-from flask import Flask, Request, jsonify, make_response, render_template, request
+from flask import Flask, Request, jsonify, make_response, redirect, render_template, request
+from werkzeug.datastructures import FileStorage
 
 from image2ascii import __version__
 from image2ascii.color import HTMLANSIColorConverter, HTMLFullRGBColorConverter
@@ -17,93 +21,63 @@ from image2ascii.db import ShelfDB
 from image2ascii.utils import shorten_string
 
 FLAG_DIR = Path(__file__).parent / "flags"
+UPLOADS_DIR = Path(__file__).parent / "uploads"
 DB = ShelfDB()
 
 application = Flask(__name__)
+os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 
-def get_flags():
-    for flag_file in sorted(FLAG_DIR.iterdir()):
-        if flag_file.is_file():
-            yield dict(value=flag_file.name, text=flag_file.stem)
-
-
-def get_i2a(request: Request) -> Image2ASCII:
-    image: Any = request.files.get("image")
-    image_url = request.form.get("image-url") or None
-    flag = request.form.get("flag") or None
-    i2a = DB.get_i2a(request.form["uuid"])
-
-    if image is not None and not image.filename:
-        image = None
-
-    if image is None and image_url is not None:
-        try:
-            headers = {"User-Agent": f"image2ascii/{__version__} (https://github.com/Eboreg/image2ascii)"}
-            response = requests.get(image_url, headers=headers, timeout=5.0)
-        except Exception as e:
-            raise ValueError(f"Could not fetch image file: {shorten_string(str(e), 200)}")
-        if response.status_code != 200:
-            raise ValueError(f"Could not fetch image file (HTTP status code={response.status_code}).")
-        if not isinstance(response.content, bytes):
-            raise ValueError(f"Could not fetch image file (response content has type '{type(response.content)}').")
-        if not len(response.content):
-            raise ValueError("Could not fetch image file (response is empty).")
-        image = io.BytesIO(response.content)
-
-    if image is None and i2a is None and flag is None:
-        raise ValueError("You need to upload an image or select a flag.")
-
-    if i2a is None:
-        i2a = Image2ASCII(config=get_config())
-
-    if image is not None:
-        i2a.load(image)
-        if hasattr(image, "close"):
-            image.close()
-    elif flag is not None:
-        i2a.load(FLAG_DIR / flag)
-
-    i2a.config.update(
-        color="color" in request.form,
-        invert="invert" in request.form,
-        negative="negative" in request.form,
-        fill_all="fill-all" in request.form,
-        contrast=float(request.form["contrast"]),
-        brightness=float(request.form["brightness"]),
-        color_balance=float(request.form["color-balance"]),
-        crop="crop" in request.form,
-        full_rgb="full-rgb" in request.form,
-    )
-
-    if i2a.config.full_rgb:
-        i2a.config.color_converter_class = HTMLFullRGBColorConverter
-    else:
-        i2a.config.color_converter_class = HTMLANSIColorConverter
-
-    return i2a
-
-
-def get_config() -> Config:
+def fetch_remote_image(url: str) -> io.BytesIO:
     try:
-        return Config.from_file(Path(__file__).parent / "web_defaults.conf")
+        headers = {"User-Agent": f"image2ascii/{__version__} (https://github.com/Eboreg/image2ascii)"}
+        response = requests.get(url, headers=headers, timeout=5.0)
+    except Exception as e:
+        raise ValueError(f"Could not fetch image file: {shorten_string(str(e), 200)}")
+    if response.status_code != 200:
+        raise ValueError(f"Could not fetch image file (HTTP status code={response.status_code}).")
+    if not isinstance(response.content, bytes):
+        raise ValueError(f"Could not fetch image file (response content has type '{type(response.content)}').")
+    if not len(response.content):
+        raise ValueError("Could not fetch image file (response is empty).")
+    return io.BytesIO(response.content)
+
+
+def generate_filename(basename: str) -> Path:
+    return UPLOADS_DIR / (os.path.splitext(basename)[0] + "-" + uuid4().hex + ".png")
+
+
+def get_config(request: Optional[Request] = None) -> Config:
+    try:
+        config = Config.from_file(Path(__file__).parent / "web_defaults.conf")
     except Exception:
-        return Config.from_default_files()
+        config = Config.from_default_files()
+
+    if request is not None:
+        config.update(
+            color="color" in request.form,
+            invert="invert" in request.form,
+            negative="negative" in request.form,
+            fill_all="fill-all" in request.form,
+            contrast=float(request.form["contrast"]),
+            brightness=float(request.form["brightness"]),
+            color_balance=float(request.form["color-balance"]),
+            crop="crop" in request.form,
+            full_rgb="full-rgb" in request.form,
+        )
+
+        if config.full_rgb:
+            config.color_converter_class = HTMLFullRGBColorConverter
+        else:
+            config.color_converter_class = HTMLANSIColorConverter
+
+    return config
 
 
-def get_context(i2a: Optional[Image2ASCII], **kwargs) -> dict:
-    context: Dict[str, Any] = dict(
+def get_context(config: Config, **kwargs) -> dict:
+    return dict(
         flags=get_flags(),
         version=__version__,
-    )
-
-    if i2a:
-        config = i2a.config
-        context.update(output=i2a.render())
-    else:
-        config = get_config()
-
-    context.update(
         color=config.color,
         invert=config.invert,
         crop=config.crop,
@@ -116,14 +90,119 @@ def get_context(i2a: Optional[Image2ASCII], **kwargs) -> dict:
         **kwargs
     )
 
-    return context
+
+def get_flags():
+    for flag_file in sorted(FLAG_DIR.iterdir()):
+        if flag_file.is_file():
+            yield dict(value=flag_file.name, text=flag_file.stem)
+
+
+def get_session(uuid: str, config: Optional[Config] = None):
+    """Raises KeyError if session is not found in DB"""
+    session = DB.get(uuid)
+    if config is not None:
+        session = DB.update(uuid, config)
+    return session
+
+
+def render(request: Request) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Gets/creates Image2ASCII object, renders it, saves it to DB.
+    Returns: (uuid, output)
+    """
+    config = get_config(request)
+
+    # 1. Try uploaded image
+    uploaded_image = request.files.get("image")
+    if uploaded_image and uploaded_image.filename:
+        return render_from_upload(uploaded_image, config)
+
+    # 2. Try pasted image URL
+    if request.form.get("image-url"):
+        return render_from_url(request.form["image-url"], config)
+
+    # 3. Try selected flag
+    if request.form.get("flag"):
+        return render_from_flag(request.form["flag"], config)
+
+    # 4. Try UUID
+    if request.form.get("uuid"):
+        return render_from_uuid(request.form["uuid"], config)
+
+    return None, None
+
+
+def render_from_flag(flag: str, config: Config) -> Tuple[str, str]:
+    filename = FLAG_DIR / flag
+    i2a = Image2ASCII(file=filename, config=config)
+    assert i2a.image is not None, "Could not load image"
+    output = i2a.render()
+    session = DB.create(filename, config, keep_file=True)
+    return session.uuid, output
+
+
+def render_from_upload(image: FileStorage, config: Config) -> Tuple[str, str]:
+    assert image.filename is not None
+    filename = generate_filename(image.filename)
+    i2a = Image2ASCII(file=image, config=config)
+    image.close()
+    assert i2a.image is not None, "Could not load image"
+    image_hash = hash(tuple(i2a.image.getdata()))
+    session = DB.get_by_hash(image_hash)
+    if session is None:
+        i2a.image.save(filename)
+        session = DB.create(filename, config, hash=image_hash)
+    else:
+        session = DB.update(session.uuid, config)
+    output = i2a.render()
+    return session.uuid, output
+
+
+def render_from_url(url: str, config: Config) -> Tuple[str, str]:
+    filename = generate_filename(urlparse(url).path.split("/")[-1])
+    image = fetch_remote_image(url)
+    i2a = Image2ASCII(file=image, config=config)
+    image.close()
+    assert i2a.image is not None, "Could not load image"
+    image_hash = hash(tuple(i2a.image.getdata()))
+    session = DB.get_by_hash(image_hash)
+    if session is None:
+        i2a.image.save(filename)
+        session = DB.create(filename, config, hash=image_hash)
+    else:
+        session = DB.update(session.uuid, config)
+    output = i2a.render()
+    return session.uuid, output
+
+
+def render_from_uuid(uuid: str, config: Optional[Config] = None) -> Tuple[Optional[str], Optional[str]]:
+    """If session not found in DB, just return uuid=None and empty output"""
+    try:
+        session = get_session(uuid, config)
+        i2a = Image2ASCII(file=session.filename, config=session.config)
+        output = i2a.render()
+        return session.uuid, output
+    except KeyError:
+        return None, None
 
 
 @application.route("/")
 def index():
-    uuid = request.args.get("uuid")
-    i2a = DB.get_i2a(uuid)
-    context = get_context(i2a, uuid=uuid)
+    context = None
+
+    if "uuid" in request.args:
+        try:
+            session = get_session(request.args["uuid"])
+            i2a = Image2ASCII(file=session.filename, config=session.config)
+            output = i2a.render()
+            context = get_context(session.config, uuid=session.uuid, output=output)
+        except KeyError:
+            # Probably requested an old or invalid URL; redirect to base
+            return redirect(request.base_url)
+
+    if context is None:
+        context = get_context(get_config())
+
     response = make_response(render_template("index.html", **context))
     return response
 
@@ -131,10 +210,7 @@ def index():
 @application.route("/post", methods=["POST"])
 def post():
     try:
-        uuid: Optional[str] = request.form["uuid"]
-        i2a = get_i2a(request)
-        output = i2a.render()
-        uuid = DB.save_i2a(i2a, uuid)
+        uuid, output = render(request)
         response = jsonify(output=output, uuid=uuid)
         return response
     except Exception as e:

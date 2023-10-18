@@ -41,6 +41,9 @@ image2ascii_testserver = "image2ascii.wsgi:testserver [www]"
 [project.urls]
 Repository = "https://github.com/Eboreg/image2ascii"
 
+[tool.setuptools]
+packages = ["image2ascii"]
+
 [tool.setuptools.dynamic]
 version = {attr = "image2ascii.__version__"}
 

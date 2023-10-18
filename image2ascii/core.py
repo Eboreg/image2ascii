@@ -43,16 +43,14 @@ class Image2ASCII(ConfigListener):
     def __hash__(self) -> int:
         return hash(self.image)
 
-    """
-    PROPERTIES
-    """
+    ### PROPERTIES ############################################################
+
     @property
     def config(self) -> Config:
         return self._config
 
-    """
-    CONVENIENCE SETTINGS METHODS
-    """
+    ### CONVENIENCE SETTINGS METHODS ##########################################
+
     def color_settings(
         self,
         color: Optional[bool] = None,
@@ -112,9 +110,8 @@ class Image2ASCII(ConfigListener):
             self.config.crop = crop
         return self
 
-    """
-    THE REST OF THE JAZZ
-    """
+    ### THE REST OF THE JAZZ ##################################################
+
     def config_changed(self, key, value):
         self.reset()
 
@@ -151,7 +148,7 @@ class Image2ASCII(ConfigListener):
         """
         if self.config.negative:
             if image.mode == "RGBA":
-                lut = [i for i in range(0xff, -1, -1)] * 3 + [i for i in range(0xff + 1)]
+                lut = list(range(0xff, -1, -1)) * 3 + list(range(0xff + 1))
                 return image.point(lut)
             return ImageOps.invert(image)
         return image
@@ -225,6 +222,10 @@ class Image2ASCII(ConfigListener):
     @timer
     def get_crop_box(self, matrix: np.ndarray) -> CropBox:
         height, width, _ = matrix.shape
+        left = 0
+        upper = 0
+        right = 0
+        lower = 0
 
         for left in range(width):
             if matrix[:, left, Vi].any():
@@ -288,7 +289,7 @@ class Image2ASCII(ConfigListener):
                 arr[:, Vi] = np.all((arr[:, A] >= 0x80, perceived_brightness < 0x80), axis=0)
 
         # Reshape to image.height rows and image.width columns
-        return arr.reshape(image.height, image.width, 5)
+        return arr.reshape(image.height, image.width, 5)  # pylint: disable=too-many-function-args
 
     @timer
     def get_section_color(self, section: np.ndarray, converter: Optional[BaseColorConverter]) -> Optional[np.ndarray]:

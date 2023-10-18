@@ -7,8 +7,8 @@ from typing import Dict, List, Tuple
 
 from image2ascii import __version__
 
+TIMING_ENABLED = False
 timings: List[Tuple[str, float]] = []
-timing_enabled = False
 
 
 def import_string(dotted_path):
@@ -16,14 +16,13 @@ def import_string(dotted_path):
     try:
         module_path, class_name = dotted_path.rsplit('.', 1)
     except ValueError as err:
-        raise ImportError("%s doesn't look like a module path" % dotted_path) from err
+        raise ImportError(f"{dotted_path} doesn't look like a module path") from err
     module = import_module(module_path)
 
     try:
         return getattr(module, class_name)
     except AttributeError as err:
-        raise ImportError(
-            "Module '%s' does not define a '%s' attribute/class" % (module_path, class_name)) from err
+        raise ImportError(f"Module '{module_path}' does not define a '{class_name}' attribute/class") from err
 
 
 def shorten_string(string: str, max_length: int) -> str:
@@ -36,7 +35,7 @@ def shorten_string(string: str, max_length: int) -> str:
 def timer(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        if not timing_enabled:
+        if not TIMING_ENABLED:
             return func(*args, **kwargs)
         start_time = time.monotonic()
         ret = func(*args, **kwargs)
@@ -65,41 +64,50 @@ def fetch_flags():
     project's requirements.
     """
     import requests
-    from bs4 import BeautifulSoup
+    from bs4 import BeautifulSoup  # pylint: disable=import-error
 
     flag_dir = Path(__file__).parent / "flags"
     user_agent = f"image2ascii/{__version__} (https://github.com/Eboreg/image2ascii)"
     headers = {"User-Agent": user_agent}
-    response = requests.get("https://en.wikipedia.org/wiki/Gallery_of_sovereign_state_flags", headers=headers)
+    response = requests.get(
+        "https://en.wikipedia.org/wiki/Gallery_of_sovereign_state_flags",
+        headers=headers,
+        timeout=10,
+    )
     soup = BeautifulSoup(response.content, "html.parser")
 
     for gallerybox in soup.select(".gallerybox"):
-        name = gallerybox.select_one(".gallerytext>p>a").text
-        name = re.sub(r"^Flag of ", "", name)
-        name = re.sub(r"^the ", "", name, flags=re.IGNORECASE)
+        a = gallerybox.select_one(".gallerytext>p>a")
+        img = gallerybox.select_one("img")
 
-        url = gallerybox.select_one("img")["src"]
-        url = re.sub(r"/\d+px-(.*)$", r"/640px-\1", url)
-        if url.startswith("//"):
-            url = "https:" + url
+        if a and img:
+            name = a.text
+            name = re.sub(r"^Flag of ", "", name)
+            name = re.sub(r"^the ", "", name, flags=re.IGNORECASE)
 
-        response = requests.get(url, headers=headers)
+            url = img["src"]
+            url = url[0] if isinstance(url, list) else url
+            url = re.sub(r"/\d+px-(.*)$", r"/640px-\1", url)
+            if url.startswith("//"):
+                url = "https:" + url
 
-        if response.status_code != 200:
-            print(f" ** ERROR trying to get {url}, status code={response.status_code}")
+            response = requests.get(url, headers=headers, timeout=10)
 
-        else:
-            content_type = response.headers["Content-Type"]
-            if content_type == "image/png":
-                extension = "png"
-            elif content_type == "image/jpeg":
-                extension = "jpg"
-            elif content_type == "image/gif":
-                extension = "gif"
+            if response.status_code != 200:
+                print(f" ** ERROR trying to get {url}, status code={response.status_code}")
+
             else:
-                print(f" ** ERROR: Unsupported content type {content_type}")
-                continue
-            filename = f"{name}.{extension}"
-            with open(flag_dir / filename, "wb") as f:
-                f.write(response.content)
-            print(f"Saved {filename}")
+                content_type = response.headers["Content-Type"]
+                if content_type == "image/png":
+                    extension = "png"
+                elif content_type == "image/jpeg":
+                    extension = "jpg"
+                elif content_type == "image/gif":
+                    extension = "gif"
+                else:
+                    print(f" ** ERROR: Unsupported content type {content_type}")
+                    continue
+                filename = f"{name}.{extension}"
+                with open(flag_dir / filename, "wb") as f:
+                    f.write(response.content)
+                print(f"Saved {filename}")

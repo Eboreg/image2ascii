@@ -98,7 +98,7 @@ class ShelfDB(BaseDB):
 
     def purge(self):
         with shelve.open(self.filename) as shelf:
-            old_files = set([s.filename for s in shelf["sessions"].values() if not s.keep_file])
+            old_files = {s.filename for s in shelf["sessions"].values() if not s.keep_file}
             sessions = {}
 
             for k, v in shelf["sessions"].items():

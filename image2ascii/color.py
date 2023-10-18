@@ -136,7 +136,7 @@ class ANSIColorConverter(BaseColorConverter):
         self.color_matrix = np.array([c.source.array for c in self.colors])
 
     @timer
-    def closest(self, color: np.ndarray) -> np.ndarray:
+    def closest(self, hsv: np.ndarray) -> np.ndarray:
         """
         For each colour, calculate the difference (as absolute numbers) of
         each parameter with the ones in `array`, and sum these. Then return
@@ -145,12 +145,12 @@ class ANSIColorConverter(BaseColorConverter):
         Algorithm from:
         https://stackoverflow.com/questions/9018016/how-to-compare-two-colors-for-similarity-difference/9085524#9085524
         """
-        rmean = (self.color_matrix[:, R] + color[R]) // 2
+        rmean = (self.color_matrix[:, R] + hsv[R]) // 2
 
         distances = np.sqrt(
-            ((512 + rmean) * np.power(self.color_matrix[:, R] - color[R], 2) >> 8) +
-            4 * np.power(self.color_matrix[:, G] - color[G], 2) +
-            ((767 - rmean) * np.power(self.color_matrix[:, B] - color[B], 2) >> 8)
+            ((512 + rmean) * np.power(self.color_matrix[:, R] - hsv[R], 2) >> 8) +
+            4 * np.power(self.color_matrix[:, G] - hsv[G], 2) +
+            ((767 - rmean) * np.power(self.color_matrix[:, B] - hsv[B], 2) >> 8)
         )
 
         return np.array(self.colors[np.argmin(distances)].source.array, dtype=np.uint8)
@@ -172,8 +172,8 @@ class HTMLANSIColorConverter(ANSIColorConverter):
 
 
 class HTMLFullRGBColorConverter(BaseColorConverter):
-    def closest(self, array: np.ndarray) -> np.ndarray:
-        return np.array(array, dtype=np.uint8)
+    def closest(self, hsv: np.ndarray) -> np.ndarray:
+        return np.array(hsv, dtype=np.uint8)
 
     def to_representation(self, array: np.ndarray) -> str:
         return to_css(array)

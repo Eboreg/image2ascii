@@ -112,26 +112,26 @@ class Config:
     _listeners: List[ConfigListener]
 
     def __init__(self):
-        self._fields = dict(
-            color=BoolValue(False),
-            crop=BoolValue(False),
-            debug=BoolValue(False),
-            fill_all=BoolValue(False),
-            full_rgb=BoolValue(False),
-            invert=BoolValue(False),
-            negative=BoolValue(False),
-            color_converter_class=NullableTypeValue(BaseColorConverter),
-            formatter_class=TypeValue(BaseFormatter, ANSIFormatter),
-            brightness=FloatValue(1.0),
-            color_balance=FloatValue(1.0),
-            contrast=FloatValue(1.0),
-            max_height=NullableIntValue(),
-            min_likeness=FloatValue(0.9),
-            quality=IntValue(5),
-            ratio=FloatValue(2.0),
-            width=IntValue(80),
-            max_original_size=IntValue(2000),
-        )
+        self._fields = {
+            "color": BoolValue(False),
+            "crop": BoolValue(False),
+            "debug": BoolValue(False),
+            "fill_all": BoolValue(False),
+            "full_rgb": BoolValue(False),
+            "invert": BoolValue(False),
+            "negative": BoolValue(False),
+            "color_converter_class": NullableTypeValue(BaseColorConverter),
+            "formatter_class": TypeValue(BaseFormatter, ANSIFormatter),
+            "brightness": FloatValue(1.0),
+            "color_balance": FloatValue(1.0),
+            "contrast": FloatValue(1.0),
+            "max_height": NullableIntValue(),
+            "min_likeness": FloatValue(0.9),
+            "quality": IntValue(5),
+            "ratio": FloatValue(2.0),
+            "width": IntValue(80),
+            "max_original_size": IntValue(2000),
+        }
         self._listeners = []
 
     def __getattr__(self, name: str):
@@ -150,7 +150,7 @@ class Config:
     def __eq__(self, __o: object) -> bool:
         field_names = self._fields.keys()
         if isinstance(__o, self.__class__):
-            return all([self._fields[name].value == __o._fields[name].value for name in field_names])
+            return all(self._fields[name].value == __o._fields[name].value for name in field_names)
         return super().__eq__(__o)
 
     def __getstate__(self):

@@ -33,12 +33,12 @@ def fetch_remote_image(url: str) -> io.BytesIO:
         headers = {"User-Agent": f"image2ascii/{__version__} (https://github.com/Eboreg/image2ascii)"}
         response = requests.get(url, headers=headers, timeout=5.0)
     except Exception as e:
-        raise ValueError(f"Could not fetch image file: {shorten_string(str(e), 200)}")
+        raise ValueError(f"Could not fetch image file: {shorten_string(str(e), 200)}") from e
     if response.status_code != 200:
         raise ValueError(f"Could not fetch image file (HTTP status code={response.status_code}).")
     if not isinstance(response.content, bytes):
         raise ValueError(f"Could not fetch image file (response content has type '{type(response.content)}').")
-    if not len(response.content):
+    if not response.content:
         raise ValueError("Could not fetch image file (response is empty).")
     return io.BytesIO(response.content)
 
@@ -75,26 +75,26 @@ def get_config(request: Optional[Request] = None) -> Config:
 
 
 def get_context(config: Config, **kwargs) -> dict:
-    return dict(
-        flags=get_flags(),
-        version=__version__,
-        color=config.color,
-        invert=config.invert,
-        crop=config.crop,
-        negative=config.negative,
-        fill_all=config.fill_all,
-        full_rgb=config.full_rgb,
-        contrast=config.contrast,
-        brightness=config.brightness,
-        color_balance=config.color_balance,
-        **kwargs
-    )
+    return {
+        "flags": get_flags(),
+        "version": __version__,
+        "color": config.color,
+        "invert": config.invert,
+        "crop": config.crop,
+        "negative": config.negative,
+        "fill_all": config.fill_all,
+        "full_rgb": config.full_rgb,
+        "contrast": config.contrast,
+        "brightness": config.brightness,
+        "color_balance": config.color_balance,
+        **kwargs,
+    }
 
 
 def get_flags():
     for flag_file in sorted(FLAG_DIR.iterdir()):
         if flag_file.is_file():
-            yield dict(value=flag_file.name, text=flag_file.stem)
+            yield {"value": flag_file.name, "text": flag_file.stem}
 
 
 def get_session(uuid: str, config: Optional[Config] = None):

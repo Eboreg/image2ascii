@@ -142,17 +142,14 @@ def main():
         return
 
     config.update(**args.__dict__)
+    start_time = time.monotonic()
 
     if args.debug:
-        utils.timing_enabled = True
-        start_time = time.monotonic()
+        utils.TIMING_ENABLED = True
 
     i2a = Image2ASCII(file=args.file, config=config)
-
     output = i2a.render()
-
-    if args.debug:
-        elapsed_time = time.monotonic() - start_time
+    elapsed_time = time.monotonic() - start_time
 
     print(output)
 

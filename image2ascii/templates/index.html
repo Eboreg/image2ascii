@@ -27,18 +27,17 @@
   <div class="drop-overlay"></div>
   <div class="d-flex flex-column h-100">
     <header class="bg-black py-3">
-      <div class="container-fluid">
+      <div class="container">
         <h1>Image2ASCII v{{ version }}</h1>
         <p class="m-0">Yes, it's slow. But it's also on a free hosting platform.</p>
       </div>
     </header>
 
     <div class="flex-grow-1">
-      <div class="container-fluid mb-3">
+      <div class="container mb-3">
         <form action="/post" method="post" id="form" enctype="multipart/form-data">
           <input type="hidden" name="uuid" id="uuid" {% if uuid %}value="{{ uuid }}"{% endif %}>
-          <div class="row">
-
+          <div class="row justify-content-between">
             <div class="col-12 mb-2">
               <div class="row align-items-center justify-content-lg-evenly">
                 <div class="col-auto my-3 d-none d-xl-block">
@@ -168,7 +167,7 @@
 
             </div>
 
-            <div class="col-12 col-md mt-3 mt-xl-0">
+            <div class="col-12 col-md mt-3 mt-xl-0 d-flex flex-column align-items-center align-items-xl-end">
               <div>
                 <div class="box pb-0 bg-black{% if not output %} d-none{% endif %}" id="result-box">
                   <div id="output" class="mb-3">{{ output|safe }}</div>
@@ -177,11 +176,15 @@
             </div>
           </div>
         </form>
+
+        <div class="text-center mt-3 text-muted">
+          N.B. If you are using Dark Reader, disable it for this site. Otherwise it will just look crappy.
+        </div>
       </div>
     </div>
 
     <footer class="bg-black py-3">
-      <div class="container-fluid small">
+      <div class="container small">
         By Robert Huselius.
         <a href="https://github.com/Eboreg/image2ascii">Here</a> are the sources for this thing,
         <a href="https://odysee.com/@klaatu:0">here</a> is my completely unrelated Odysee channel, and

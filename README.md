@@ -23,7 +23,10 @@ pip install image2ascii[www]
 # You do use virtual envs, right?
 python3 -m venv .venv
 source .venv/bin/activate
-./setup.py install
+# Minimal install:
+pip install -e .
+# Install with WSGI capabilities (see below):
+pip install -e .[www]
 ```
 
 ## Usage

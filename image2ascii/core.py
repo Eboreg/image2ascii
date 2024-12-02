@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from typing import List, Optional, Tuple
+from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageEnhance, ImageOps
@@ -23,15 +23,15 @@ FILLED_CHARACTER = "$"
 class Image2ASCII(ConfigListener):
     _config: Config
 
-    image: Optional[Image.Image] = None
-    output: Optional[Output] = None
+    image: Image.Image | None = None
+    output: Output | None = None
 
-    shapes: List[BaseShape]
+    shapes: list[BaseShape]
 
     def __init__(
         self,
         file=None,
-        config: Optional[Config] = None,
+        config: Config | None = None,
     ):
         if config is None:
             config = Config.from_default_files()
@@ -49,14 +49,19 @@ class Image2ASCII(ConfigListener):
     def config(self) -> Config:
         return self._config
 
+    @property
+    def image_hash(self) -> int:
+        assert self.image
+        return hash(tuple(self.image.getdata()))
+
     ### CONVENIENCE SETTINGS METHODS ##########################################
 
     def color_settings(
         self,
-        color: Optional[bool] = None,
-        invert: Optional[bool] = None,
-        negative: Optional[bool] = None,
-        fill_all: Optional[bool] = None,
+        color: bool | None = None,
+        invert: bool | None = None,
+        negative: bool | None = None,
+        fill_all: bool | None = None,
     ):
         if color is not None:
             self.config.color = color
@@ -70,9 +75,9 @@ class Image2ASCII(ConfigListener):
 
     def enhancement_settings(
         self,
-        contrast: Optional[float] = None,
-        brightness: Optional[float] = None,
-        color_balance: Optional[float] = None
+        contrast: float | None = None,
+        brightness: float | None = None,
+        color_balance: float | None = None
     ):
         if contrast is not None:
             self.config.contrast = contrast
@@ -82,7 +87,7 @@ class Image2ASCII(ConfigListener):
             self.config.color_balance = color_balance
         return self
 
-    def quality_settings(self, quality: Optional[int] = None, min_likeness: Optional[float] = None):
+    def quality_settings(self, quality: int | None = None, min_likeness: float | None = None):
         if quality is not None:
             self.config.quality = quality
         if min_likeness is not None:
@@ -91,10 +96,10 @@ class Image2ASCII(ConfigListener):
 
     def size_settings(
         self,
-        max_height: Optional[int] = None,
-        width: Optional[int] = None,
-        ratio: Optional[float] = None,
-        crop: Optional[bool] = None
+        max_height: int | None = None,
+        width: int | None = None,
+        ratio: float | None = None,
+        crop: bool | None = None
     ):
         """
         To explicitly set max height to None, if it has previously been set to
@@ -116,7 +121,7 @@ class Image2ASCII(ConfigListener):
         self.reset()
 
     @timer
-    def do_crop(self, image: Image.Image, matrix: np.ndarray) -> Tuple[Image.Image, bool]:
+    def do_crop(self, image: Image.Image, matrix: np.ndarray) -> tuple[Image.Image, bool]:
         """
         `image` does not necessarily have the same dimensions as `matrix`, so
         we transpose the cropbox before doing the actual cropping.
@@ -209,7 +214,7 @@ class Image2ASCII(ConfigListener):
         return image
 
     @timer
-    def get_char(self, nonzero_coords: List[Tuple[int, int]]) -> str:
+    def get_char(self, nonzero_coords: list[tuple[int, int]]) -> str:
         chars = []  # list of (char, likeness) tuples
 
         for shape in self.shapes:
@@ -292,7 +297,7 @@ class Image2ASCII(ConfigListener):
         return arr.reshape(image.height, image.width, 5)  # pylint: disable=too-many-function-args
 
     @timer
-    def get_section_color(self, section: np.ndarray, converter: Optional[BaseColorConverter]) -> Optional[np.ndarray]:
+    def get_section_color(self, section: np.ndarray, converter: BaseColorConverter | None) -> np.ndarray | None:
         # Generate a 2-d array of colour data for points where V > 0:
         if converter is not None:
             colors = section[section[:, :, Vi] > 0]
@@ -301,7 +306,7 @@ class Image2ASCII(ConfigListener):
                 return converter.closest(color_arr)
         return None
 
-    def get_section_size(self, image: Image.Image) -> Tuple[int, int]:
+    def get_section_size(self, image: Image.Image) -> tuple[int, int]:
         section_width = int(image.width / self.config.width) or 1
         return section_width, int(section_width * self.config.ratio) or 1
 
@@ -347,7 +352,7 @@ class Image2ASCII(ConfigListener):
         return self
 
     @timer
-    def prepare_image(self) -> Tuple[Image.Image, np.ndarray]:
+    def prepare_image(self) -> tuple[Image.Image, np.ndarray]:
         """
         There is a logic to the order of execution here; first of all, we need
         a get_matrix() in order to do_crop(). That matrix has to be generated
@@ -423,3 +428,7 @@ class Image2ASCII(ConfigListener):
 
     def reset(self):
         self.output = None
+
+    def save_image(self, filename: str | Path):
+        if self.image:
+            self.image.save(filename)

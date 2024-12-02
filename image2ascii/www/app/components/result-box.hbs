@@ -1,0 +1,23 @@
+<div class="box bg-black" id="result-box" {{on "dragenter" this.onDragEnter}} ...attributes>
+  {{#if @output}}
+    {{html-safe @output}}
+  {{/if}}
+
+  {{#if this.showDragOverlay}}
+    <h3
+      id="drag-overlay"
+      {{on "dragleave" this.onDragLeave}}
+      {{on "drop" this.onDrop}}
+    >You can drop the image now.</h3>
+  {{/if}}
+
+  {{#if this.showDragInfo}}
+    <h4 id="drag-overlay">You can drag and drop an image here.</h4>
+  {{/if}}
+
+  {{#if @is-loading}}
+    <div class="loading-overlay show">
+      <h3 class="studso">Loading loading loading!</h3>
+    </div>
+  {{/if}}
+</div>

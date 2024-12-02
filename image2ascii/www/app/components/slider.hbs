@@ -1,0 +1,19 @@
+<div class="col-12 col-sm-6 col-lg-4 col-xl-12 col-xxl-6 mb-3">
+  <label for={{@id}} class="form-label">{{@label}}</label>
+  <div class="row">
+    <div class="col-auto flex-grow-1">
+      <Input
+        @type="range"
+        name={{@id}}
+        id={{@id}}
+        class="form-range"
+        min="0.5"
+        max="3.0"
+        step="0.1"
+        @value={{@value}}
+        ...attributes
+      />
+    </div>
+    <div class="slider-value">{{format-slider-value @value}}</div>
+  </div>
+</div>

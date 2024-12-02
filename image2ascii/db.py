@@ -2,7 +2,7 @@ import os
 import shelve
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict
 from uuid import uuid4
 
 from image2ascii.config import Config
@@ -11,32 +11,37 @@ KEEP_DAYS = 7
 
 
 class Session:
-    uuid: str
-
     def __init__(
         self,
-        uuid: str,
-        filename: Union[str, Path],
+        filename: str | Path,
         config: Config,
         keep_file=False,
-        hash: Optional[int] = None
+        hash: int | None = None,
+        flag: str | None = None,
+        uuid: str | None = None,
     ):
         self.datetime = datetime.now()
-        self.uuid = uuid
+        self.uuid = uuid or str(uuid4())
         self.filename = filename
         self.config = config
         self.keep_file = keep_file
         self.hash = hash
+        self.flag = flag
+
+    @classmethod
+    def from_dict(cls, d: dict):
+        args = ["uuid", "filename", "config", "keep_file", "hash", "flag"]
+        return cls(**{k: v for k, v in d.items() if k in args})
 
 
 class BaseDB:
     def get(self, uuid: str) -> Session:
         raise NotImplementedError
 
-    def get_by_hash(self, hash: int) -> Optional[Session]:
+    def get_by_hash(self, hash: int) -> Session | None:
         raise NotImplementedError
 
-    def create(self, filename: Union[str, Path], config: Config, keep_file=False) -> Session:
+    def create(self, filename: str | Path, config: Config, keep_file=False) -> Session:
         raise NotImplementedError
 
     def update(self, uuid: str, config: Config) -> Session:
@@ -56,9 +61,10 @@ class ShelfDB(BaseDB):
     def get(self, uuid: str) -> Session:
         """May raise KeyError"""
         with shelve.open(self.filename) as shelf:
-            return shelf["sessions"][uuid]
+            session = shelf["sessions"][uuid]
+            return Session.from_dict(session.__dict__)
 
-    def get_by_hash(self, hash: int) -> Optional[Session]:
+    def get_by_hash(self, hash: int) -> Session | None:
         with shelve.open(self.filename) as shelf:
             try:
                 return [s for s in shelf["sessions"].values() if s.hash == hash][0]
@@ -67,12 +73,13 @@ class ShelfDB(BaseDB):
 
     def create(
         self,
-        filename: Union[str, Path],
+        filename: str | Path,
         config: Config,
         keep_file=False,
-        hash: Optional[int] = None,
+        hash: int | None = None,
+        flag: str | None = None,
     ) -> Session:
-        session = Session(str(uuid4()), filename, config, keep_file=keep_file, hash=hash)
+        session = Session(filename=filename, config=config, keep_file=keep_file, hash=hash, flag=flag)
 
         with shelve.open(self.filename) as shelf:
             sessions = shelf["sessions"]
@@ -82,16 +89,21 @@ class ShelfDB(BaseDB):
         self.purge()
         return session
 
-    def update(self, uuid: str, config: Config) -> Session:
+    def update(self, uuid: str, config: Config, flag: str | None = None) -> Session:
         with shelve.open(self.filename) as shelf:
             sessions: Dict[str, Session] = shelf["sessions"]
             # May raise KeyError:
             session = sessions[uuid]
             if session.config != config:
                 # If config changed, make a new session with new uuid
-                uuid = str(uuid4())
-                session = Session(uuid, session.filename, config, keep_file=session.keep_file, hash=session.hash)
-                sessions[uuid] = session
+                session = Session(
+                    filename=session.filename,
+                    config=config,
+                    keep_file=session.keep_file,
+                    hash=session.hash,
+                    flag=flag,
+                )
+                sessions[session.uuid] = session
                 shelf["sessions"] = sessions
         self.purge()
         return session

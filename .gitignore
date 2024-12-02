@@ -13,6 +13,7 @@ config.ini
 defaults.conf
 /image2ascii_db*
 image2ascii/uploads/**
+**/.mypy_cache
 
 # Elastic Beanstalk Files
 .elasticbeanstalk/*

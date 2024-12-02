@@ -1,0 +1,133 @@
+{{page-title this.pageTitle}}
+<div class="d-flex flex-column h-100 content">
+  <header class="bg-black py-3">
+    <div class="container">
+      <h1 class="rotato {{if this.isLoading "active"}}">{{this.pageTitle}}</h1>
+      <p class="m-0">Yes, it's slow. But it's also on a free hosting platform.</p>
+    </div>
+  </header>
+
+  <div class="flex-grow-1">
+    <div class="container mb-3">
+      <form action="/post" method="post" id="form" enctype="multipart/form-data">
+        <input type="hidden" name="uuid" id="uuid" value="{{if this.uuid this.uuid}}" />
+        <div class="row justify-content-between">
+          <div class="col-12 mb-2">
+            <div class="row align-items-center justify-content-lg-evenly">
+              <div class="col-auto my-3 d-none d-xl-block">
+                <img src="{{this.pointingUrl}}" class="pointing-hand" />
+              </div>
+              <div class="col col-lg-auto mt-3">
+                <div class="row align-items-center">
+                  <div class="col-12 col-lg-auto mb-3">
+                    <Input
+                      @type="file"
+                      name="image"
+                      id="image"
+                      class="d-none"
+                      accept="image/*"
+                      disabled={{this.isLoading}}
+                      {{on "input" this.onFileSelect}}
+                    />
+                    <Input @type="hidden" name="image-url" id="image-url" disabled={{this.isLoading}} />
+                    <a href=""><label for="image">Upload an image</label></a>, paste or drag &amp; drop it in the
+                    result box below, or select a flag you like:
+                  </div>
+                  <div class="col-12 col-lg-auto mb-3">
+                    <select
+                      name="flag"
+                      id="flag"
+                      class="form-select bg-dark text-light form-control"
+                      {{on "input" this.onFlagSelect}}
+                      disabled={{this.isLoading}}
+                    >
+                      <Option @value="" @selected={{this.isNoFlagSelected}} />
+                      {{#each @model.flags as |flag|}}
+                        <Option @value={{flag.value}} @selected={{this.isFlagSelected flag}}>{{flag.text}}</Option>
+                      {{/each}}
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div class="col-auto my-3 d-none d-xl-block">
+                <img src="{{this.pointingUrl}}" class="pointing-hand mirrored" />
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-xl-4 col-xxl-5 mb-3">
+            <div class="row">
+              {{#each this.checkboxes as |checkbox|}}
+                <Checkbox @data={{checkbox}} disabled={{this.isLoading}} />
+              {{/each}}
+            </div>
+
+            <div class="row">
+              <Slider @id="contrast" @label="Contrast" @value={{@model.sliders.contrast}} disabled={{this.isLoading}} />
+              <Slider
+                @id="brightness"
+                @label="Brightness"
+                @value={{@model.sliders.brightness}}
+                disabled={{this.isLoading}}
+              />
+              <Slider
+                @id="color-balance"
+                @label="Colour balance"
+                @value={{@model.sliders.color-balance}}
+                disabled={{this.isLoading}}
+              />
+            </div>
+
+            <div class="row mt-3">
+              <div class="col-auto">
+                <button
+                  type="button"
+                  id="submit"
+                  class="btn btn-primary"
+                  disabled={{this.isLoading}}
+                  {{on "click" this.onUpdateClick}}
+                >Update</button>
+              </div>
+              <div class="col-auto">
+                <button
+                  type="button"
+                  id="reset"
+                  class="btn btn-secondary"
+                  disabled={{this.isLoading}}
+                  {{on "click" this.onResetClick}}
+                >Reset adjustments</button>
+              </div>
+            </div>
+
+          </div>
+
+          <div class="col-12 col-md mt-3 mt-xl-0 d-flex flex-column align-items-xl-end align-items-lg-center">
+            <ResultBox
+              @output={{@model.output}}
+              @on-file-drop={{this.uploadFile}}
+              @on-url-drop={{this.onUrlDrop}}
+              @is-loading={{this.isLoading}}
+            />
+          </div>
+        </div>
+      </form>
+
+      <div class="text-center mt-3 text-muted">
+        N.B. If you are using Dark Reader, disable it for this site. Otherwise it will just look like shit.
+      </div>
+    </div>
+  </div>
+
+  <footer class="bg-black py-3">
+    <div class="container small">
+      By Robert Huselius.
+      <a href="https://github.com/Eboreg/image2ascii">Here</a>
+      are the sources for this thing,
+      <a href="https://odysee.com/@klaatu:0">here</a>
+      is my completely unrelated Odysee channel, and
+      <a href="https://anchor.fm/musikens-makt">here</a>
+      is my equally unrelated Swedish podcast.
+    </div>
+  </footer>
+</div>
+{{outlet}}

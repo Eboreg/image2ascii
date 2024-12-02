@@ -34,7 +34,16 @@ www = [
     "uWSGI==2.*",
 ]
 dev = [
+    "autopep8",
     "beautifulsoup4",
+    "build",
+    "flake8",
+    "ipdb",
+    "ipython",
+    "isort",
+    "mypy",
+    "twine",
+    "types-Pillow",
     "types-requests",
 ]
 
@@ -57,7 +66,7 @@ default_section = "THIRDPARTY"
 include_trailing_comma = true
 line_length = 119
 multi_line_output = 5
-skip = [".venv", "build", "dist"]
+skip = [".venv", "build", "dist", "image2ascii/www"]
 
 [tool.mypy]
 check_untyped_defs = true
@@ -79,6 +88,7 @@ disable = [
     "too-few-public-methods",
     "too-many-arguments",
     "too-many-locals",
+    "too-many-public-methods",
     "unspecified-encoding",
 ]
 ignore = [".venv"]

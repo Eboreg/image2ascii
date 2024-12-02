@@ -1,0 +1,15 @@
+<div class="col-12 col-sm-6 col-lg-4 col-xl-12 col-xxl-6 mb-3">
+  <div class="form-check">
+    <Input
+      @type="checkbox"
+      @checked={{@data.checked}}
+      id={{@data.id}}
+      name={{@data.id}}
+      class="form-check-input"
+      {{on "change" this.onChange}}
+      ...attributes
+    />
+    <label class="form-check-label" for="{{@data.id}}">{{@data.label}}</label>
+    <div class="form-text">{{@data.text}}</div>
+  </div>
+</div>

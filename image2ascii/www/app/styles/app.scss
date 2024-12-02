@@ -1,0 +1,160 @@
+html,
+body {
+    height: 100%;
+}
+
+a {
+    color: var(--bs-light);
+    font-weight: bold;
+
+    & > label {
+        text-decoration: underline;
+        cursor: pointer;
+    }
+}
+
+pre {
+    line-height: 1rem;
+    margin-bottom: 0 !important;
+    overflow-y: hidden;
+    overflow-x: auto;
+}
+
+.form-check-input {
+    background-color: var(--bs-dark);
+    border-color: var(--bs-secondary);
+    border-radius: 0 !important;
+}
+
+.form-control {
+    border-color: var(--bs-secondary);
+    border-radius: 0;
+}
+
+.form-range::-moz-range-track {
+    background-color: var(--bs-gray-800);
+    border-radius: 0;
+}
+
+.box {
+    position: relative;
+    padding: 1rem;
+    border: 1px solid var(--bs-secondary);
+}
+
+#result-box {
+    min-height: 200px;
+
+    @media (min-width: 768px) {
+        display: inline-block;
+    }
+
+    @media (min-width: 992px) {
+        min-width: calc(.525rem * 80 + 2rem + 2px);
+    }
+}
+
+.pointing-hand {
+    height: 25px;
+
+    &.mirrored {
+        transform: scaleX(-1);
+    }
+}
+
+.slider-value {
+    width: 50px;
+}
+
+select:disabled {
+    opacity: 0.6 !important;
+}
+
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+
+    &.show {
+        display: flex;
+    }
+
+    h2 {
+        background-color: black;
+        padding: 1rem;
+        border-radius: 10px;
+    }
+}
+
+@keyframes studso {
+    from {
+        left: -10px;
+        top: -10px;
+    }
+    33% {
+        left: 10px;
+        top: 0px;
+    }
+    67% {
+        left: 0px;
+        top: 10px;
+    }
+    to {
+        left: -10px;
+        top: 0px;
+    }
+}
+
+.studso {
+    animation-direction: alternate;
+    animation-duration: 0.25s;
+    animation-iteration-count: infinite;
+    animation-name: studso;
+    position: relative;
+
+    &.reverse {
+        animation-direction: alternate-reverse;
+    }
+}
+
+@keyframes rotato {
+    from {
+        transform: rotateX(0deg);
+    }
+    to {
+        transform: rotateX(360deg);
+    }
+}
+
+.rotato {
+    &.active {
+        animation-duration: 1s;
+        animation-iteration-count: infinite;
+        animation-name: rotato;
+        animation-timing-function: linear;
+    }
+    &:not(.active) {
+        transition-duration: .5s;
+        transition-property: transform;
+        transition-timing-function: linear;
+        transform: rotateX(0deg);
+    }
+}
+
+#drag-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, .5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}

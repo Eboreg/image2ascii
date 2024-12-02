@@ -1,0 +1,5 @@
+{{#if @selected}}
+<option value={{@value}} selected ...attributes>{{yield}}</option>
+{{else}}
+<option value={{@value}} ...attributes>{{yield}}</option>
+{{/if}}

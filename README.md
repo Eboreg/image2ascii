@@ -6,7 +6,7 @@ This is a thing that makes fancy ANSI graphics out of image files. And not just 
 
 It's an almost complete rewrite of an old project of mine. It's pretty versatile. You can adjust sizes, colour balance, contrast, define your own colour converters, shape sets, etc.
 
-There is a CLI tool in [a separate repo](https://github.com/Eboreg/image2ascii-cli). More info will probably come soon.
+More info will probably come soon.
 
 <img width="700" height="800" alt="image" src="https://github.com/user-attachments/assets/9f55bc2d-92d0-490a-87b4-e4ad501d519f" />
 

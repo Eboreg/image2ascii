@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from typing import TypedDict
 
 
-TIMING_ENABLED = True
+TIMING_ENABLED = False
 
 timings: "list[TimingDict]" = []
 running_timings: "list[TimingDict]" = []
@@ -19,7 +19,7 @@ class TimingDict(TypedDict):
 def timer(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        global timings, running_timings
+        global timings, running_timings, TIMING_ENABLED
 
         if not TIMING_ENABLED:
             return func(*args, **kwargs)

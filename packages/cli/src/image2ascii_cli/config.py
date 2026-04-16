@@ -8,7 +8,7 @@ from image2ascii.config import Config as BaseConfig
 from image2ascii.config_types import NullableColorType
 from image2ascii.enums import ColorInferenceMethod
 from image2ascii.renderers import ConsoleRenderer, ImageRenderer
-from image2ascii.timing import TIMING_ENABLED, print_results
+from image2ascii.timing import print_results
 from image2ascii.workhorse import Workhorse
 
 
@@ -26,7 +26,7 @@ class Config(
     cli_prog_name="i2a",
     cli_parse_none_str="none",
 ):
-    filename: CliPositionalArg[str]
+    filename: CliPositionalArg[str] = ""
     outfile: str | None = Field(description="Image file to write the results to", default=None)
     outfile_size: int = Field(
         default=1000,
@@ -60,6 +60,8 @@ class Config(
         description="Only valid for console output. Adds a nice border.",
     )
     border_color: NullableColorType = None
+    debug: bool = False
+    
 
     model_config = SettingsConfigDict(
         cli_shortcuts={
@@ -71,6 +73,10 @@ class Config(
     )
 
     def cli_cmd(self):
+        if self.debug:
+            from image2ascii import timing
+            timing.TIMING_ENABLED = True
+
         if self.fastest:
             self.transparency.disable = True
             self.quality = 1
@@ -104,5 +110,5 @@ class Config(
             # ascii.prepare_and_render(renderer, zoom=self.zoom, center=(self.x, self.y))
             print()
 
-        if TIMING_ENABLED:
+        if self.debug:
             print_results()

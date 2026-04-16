@@ -1,0 +1,19 @@
+# Python-generated files
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+.vscode
+**/__pycache__
+/.env
+**/.mypy_cache
+**/*.egg-info
+.directory
+/*.jpg
+/*.png
+.DS_Store

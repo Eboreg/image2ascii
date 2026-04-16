@@ -1,0 +1,23 @@
+[project]
+name = "image2ascii-emoji"
+version = "0.1.0"
+description = ""
+readme = "README.md"
+authors = [
+    { name = "Robert Huselius", email = "robert@huseli.us" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "image2ascii",
+    "pydantic-settings>=2.13.1",
+]
+
+[project.entry-points.i2a_plugins]
+emoji = "image2ascii_emoji"
+
+[build-system]
+requires = ["uv_build>=0.9.7,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+image2ascii = { workspace = true }

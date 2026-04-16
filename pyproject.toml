@@ -1,0 +1,75 @@
+[project]
+name = "image2ascii"
+version = "0.8.0"
+description = "Turns images into ASCII art. This is just the core library; make sure to install some extras, too."
+readme = "README.md"
+authors = [
+    { name = "Robert Huselius", email = "robert@huseli.us" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "cairosvg>=2.9.0",
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.4",
+    "pillow>=12.2.0",
+    "platformdirs>=4.9.6",
+    "pydantic>=2.13.1",
+    "pydantic-settings>=2.13.1",
+]
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
+
+[build-system]
+requires = ["uv_build>=0.9.7,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv.workspace]
+members = [
+    "packages/cli",
+    "packages/emoji",
+]
+
+[tool.uv.sources]
+image2ascii-emoji = { workspace = true }
+image2ascii-cli = { workspace = true }
+
+[dependency-groups]
+cli = [
+    "image2ascii-cli",
+]
+dev = [
+    "image2ascii-cli",
+    "image2ascii-emoji",
+    "ipdb>=0.13.13",
+    "ipython>=9.12.0",
+    "ruff>=0.15.10",
+]
+emoji = [
+    "image2ascii-emoji",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+exclude = [".venv", ".git", ".mypy_cache", "__pycache__", "build", "node_modules", "scratch.py"]
+show-fixes = true
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I"]
+ignore = ["E722", "B027"]
+
+[tool.ruff.lint.isort]
+lines-after-imports = 2
+combine-as-imports = true
+default-section = "third-party"
+section-order = [
+    "future",
+    "standard-library",
+    "third-party",
+    "first-party",
+    "local-folder",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+docstring-code-line-length = 80

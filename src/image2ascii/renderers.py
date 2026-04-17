@@ -85,6 +85,12 @@ class AbstractStringRenderer(AbstractRenderer, ABC):
 
 class ConsoleRenderer(AbstractStringRenderer):
     BR = "\n"
+    HORIZONTAL_LINE = "─"    # alt: ⎺⎽⎯‾─
+    VERTICAL_LINE = "⎜"      # alt: ⎜⎟⎢⎥⎪│
+    UPPER_LEFT_CORNER = "┌"  # alt: ⎾⎡┌
+    UPPER_RIGHT_CORNER = "┐" # alt: ⏋⎤┐
+    LOWER_LEFT_CORNER = "└"  # alt: ⎿⎣└
+    LOWER_RIGHT_CORNER = "┘" # alt: ⏌⎦┘
 
     width_with_margins: int
 
@@ -106,7 +112,7 @@ class ConsoleRenderer(AbstractStringRenderer):
     def on_finish(self):
         self.on_row_end()
 
-        for _ in range(self.margins):
+        for _ in range(int(self.margins / 2)):
             self.on_line_break()
             self.on_row_start()
             self.output(" " * self.size_chars_rounded.width)
@@ -139,7 +145,7 @@ class ConsoleRenderer(AbstractStringRenderer):
             self.output(" " * self.margins)
         if self.border:
             self.on_new_color(self.border_color)
-            self.output("│")
+            self.output(self.VERTICAL_LINE)
 
     @timer
     def on_row_start(self):
@@ -149,20 +155,20 @@ class ConsoleRenderer(AbstractStringRenderer):
 
         if self.border:
             self.on_new_color(self.border_color)
-            self.output("│")
+            self.output(self.VERTICAL_LINE)
         if self.margins:
             self.output(ANSI_RESET_FG)
-            self.output("  " * self.margins)
+            self.output(" " * self.margins)
 
     @timer
     def on_start(self):
-        self.width_with_margins = self.size_chars_rounded.width + (self.margins * 4)
+        self.width_with_margins = self.size_chars_rounded.width + (self.margins * 2)
 
         if self.border:
             self.output_upper_border()
             self.on_line_break()
 
-        for _ in range(self.margins):
+        for _ in range(int(self.margins / 2)):
             self.on_row_start()
             self.output(" " * self.size_chars_rounded.width)
             self.on_row_end()
@@ -177,17 +183,17 @@ class ConsoleRenderer(AbstractStringRenderer):
     def output_lower_border(self):
         self.output_bg()
         self.on_new_color(self.border_color)
-        self.output("└")
-        self.output("─" * self.width_with_margins)
-        self.output("┘")
+        self.output(self.LOWER_LEFT_CORNER)
+        self.output(self.HORIZONTAL_LINE * self.width_with_margins)
+        self.output(self.LOWER_RIGHT_CORNER)
 
     @timer
     def output_upper_border(self):
         self.output_bg()
         self.on_new_color(self.border_color)
-        self.output("┌")
-        self.output("─" * self.width_with_margins)
-        self.output("┐")
+        self.output(self.UPPER_LEFT_CORNER)
+        self.output(self.HORIZONTAL_LINE * self.width_with_margins)
+        self.output(self.UPPER_RIGHT_CORNER)
 
 
 class HTMLRenderer(AbstractStringRenderer):

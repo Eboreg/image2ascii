@@ -5,8 +5,7 @@ from typing import IO, TYPE_CHECKING, Any, Generator, Self
 import numpy as np
 
 from image2ascii.character import Character
-from image2ascii.geometry import OptionalPointF, PositionedBoxF, Size, SizeF, SubRect2
-from image2ascii.geometry.rect import SubRectF2
+from image2ascii.geometry import Size, SizeF, SubRect2, SubRectF2
 from image2ascii.image import ImagePlus
 from image2ascii.registry import Registry
 from image2ascii.timing import timer
@@ -16,7 +15,7 @@ from image2ascii.types import ImageArray
 if TYPE_CHECKING:
     from image2ascii.color_converters import AbstractColorConverter
     from image2ascii.config import Config
-    from image2ascii.geometry import PositionedBoxPartition, ShapeSet, PointF
+    from image2ascii.geometry import PointF, PositionedBoxPartition, ShapeSet
     from image2ascii.renderers import AbstractRenderer
 
 
@@ -32,7 +31,8 @@ class Workhorse:
     @property
     def final_size_chars_f(self) -> SizeF:
         """Final number of columns & rows of the ASCII output"""
-        return self.config.viewport_size.fit_ratio(self.image.ratio / self.config.char_ratio)
+        ratio = self.image.ratio if self.is_image_pixelmapped else self.image.ratio / self.config.char_ratio
+        return self.config.viewport_size.fit_ratio(ratio)
 
     @property
     def final_size_chars(self) -> Size:

@@ -190,10 +190,12 @@ class Config(BaseSettings, validate_assignment=True):
 
     @classmethod
     def extend(cls, other: type["Config"]):
-        # cls.__pydantic_fields__.update({k: v for k, v in other.model_fields.items() if k not in cls.model_fields})
-        # cls.__pydantic_complete__ = False
-        # cls.model_rebuild(force=True)
-        return create_model(cls.__name__, __base__=(cls, other), __module__=cls.__module__)
+        default_config = BaseSettings.model_config
+        model_config = other.model_config.copy()
+        for key, value in cls.model_config.items():
+            if key not in default_config or value != default_config[key]:
+                model_config[key] = value
+        return create_model(cls.__name__, __base__=(cls, other), __module__=cls.__module__, __config__=model_config)
 
     @classmethod
     def settings_customise_sources(

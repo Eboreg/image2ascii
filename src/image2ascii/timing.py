@@ -103,9 +103,9 @@ class TimingResult:
         child_count = sum(c.executions for c in self.collect()) - self.executions
 
         print(
-            f"{prefix}{self.name:{56 - indent}s} {str(self.executions):7s} {ff(self.average_own_time):13s} "
-            f"{ff(self.average_time):11s} {ff(self.total_own_time):15s} {ff(self.total_time):10s} "
-            f"{percent_own_time:9.4f} {percent_total:11.4f} {child_count:10d}"
+            f"{prefix}{self.name:{50 - indent}s} {self.executions:7d} {child_count:8d}  "
+            f"{ff(self.average_own_time):12s} {ff(self.average_time):12s} {ff(self.total_own_time):12s} "
+            f"{ff(self.total_time):12s} {percent_own_time:8.4f} {percent_total:8.4f}"
         )
 
         if print_children:
@@ -115,10 +115,16 @@ class TimingResult:
     @classmethod
     def print_header(cls):
         print(
-            "Function                                                 #       Avg own time  Avg time    Total own time  Total time  % own time  % total  # children"  # noqa: E501
+            "AOT = avg own time  AT = avg time  TOT = total own time  TT = total time  %OT = % own time  "
+            "%TT = % total time  #CH = # children"
         )
         print(
-            "------------------------------------------------------------------------------------------------------------------------------------------------------"
+            "Function                                                 #      #CH  AOT          AT           "
+            "TOT          TT                %OT       %T"
+        )
+        print(
+            "---------------------------------------------------------------------------------------------------------"
+            "---------------------------------"
         )
 
 

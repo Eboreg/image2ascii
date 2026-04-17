@@ -9,7 +9,7 @@ from PIL import Image, ImageEnhance, ImageOps
 from PIL.Image import Resampling
 
 from image2ascii.color import A, B, Color, G, R, Vi, get_perceived_brightness
-from image2ascii.geometry import AbstractSize, Size, SubRect, SubRect2
+from image2ascii.geometry import AbstractSize, Margins, Size, SubRect, SubRect2
 from image2ascii.timing import timer
 from image2ascii.types import ImageArray
 
@@ -71,7 +71,9 @@ class ImagePlus:
         return ImagePlus(self.__image.copy(), self.__matrix)
 
     @timer
-    def crop(self, box: tuple[int, int, int, int] | SubRect | SubRect2):
+    def crop(self, box: tuple[int, int, int, int] | SubRect | SubRect2 | Margins):
+        if isinstance(box, Margins):
+            box = SubRect(-box.left, -box.top, self.size.width+box.right, self.size.height+box.bottom)
         if isinstance(box, tuple):
             box = SubRect(*box)
         if any(box.tuple):
@@ -105,6 +107,11 @@ class ImagePlus:
     def get_visible_cropbox(self, regenerate_matrix_if_stale: bool):
         matrix = self.get_matrix(regenerate_if_stale=regenerate_matrix_if_stale)
         return SubRect2.from_visible(matrix)
+
+    @timer
+    def get_visible_margins(self, regenerate_matrix_if_stale: bool):
+        matrix = self.get_matrix(regenerate_if_stale=regenerate_matrix_if_stale)
+        return Margins.from_visible(matrix)
 
     @timer
     def has_invisibility(self, regenerate_matrix_if_stale: bool) -> bool:

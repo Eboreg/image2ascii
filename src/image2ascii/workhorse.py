@@ -6,6 +6,7 @@ import numpy as np
 
 from image2ascii.character import Character
 from image2ascii.geometry import OptionalPointF, PositionedBoxF, Size, SizeF, SubRect2
+from image2ascii.geometry.rect import SubRectF2
 from image2ascii.image import ImagePlus
 from image2ascii.registry import Registry
 from image2ascii.timing import timer
@@ -15,7 +16,7 @@ from image2ascii.types import ImageArray
 if TYPE_CHECKING:
     from image2ascii.color_converters import AbstractColorConverter
     from image2ascii.config import Config
-    from image2ascii.geometry import PositionedBoxPartition, ShapeSet
+    from image2ascii.geometry import PositionedBoxPartition, ShapeSet, PointF
     from image2ascii.renderers import AbstractRenderer
 
 
@@ -92,16 +93,26 @@ class Workhorse:
         if self.config.transparency.use_alpha():
             image.update_visibility_by_alpha(self.config.transparency.alpha)
 
-    def zoom(self, factor: float, center: "OptionalPointF" = None):
+    def zoom(self, factor: float, center: "PointF | None" = None):
+        import ipdb; ipdb.set_trace()
         image = self.original_image.copy()
+        size = image.size
+        cropbox = SubRectF2(image.size)
         if self.visible_cropbox:
-            cropbox = self.visible_cropbox * image.size
-        center = center or (0.5, 0.5)
-        box = (
-            PositionedBoxF(self.final_size_px, self.config.viewport_size_px)
-            .zoom(factor)
-            .place_relatively(center)
-        )
+            cropbox += self.visible_cropbox * image.size
+            size = cropbox.size
+        fitted_size = size.fit_inside(self.config.viewport_size_px)
+        zoomed_size = fitted_size * factor
+        resized_viewport = self.config.viewport_size_px.fit_outside(size) * (1 / factor)
+        cropbox += size.crop(resized_viewport, center).to_subrect(round_for_ratio=True)
+        image.crop(cropbox.to_subrect(round_for_ratio=True))
+
+        # fitted_size *= factor
+        # center = center or (0.5, 0.5)
+        # box = PositionedBoxF(fitted_size, self.config.viewport_size_px).zoom(factor).place_relatively(center)
+        # cropbox after image is cropped to `cropbox` and resized by `factor`:
+        # zoomed_cropbox = box.visible_box
+        # box2 = PositionedBoxF(size, self.config.viewport_size_px).place_relatively(center)
 
     @timer
     def prepare(self):

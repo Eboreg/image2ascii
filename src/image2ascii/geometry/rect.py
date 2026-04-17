@@ -2,7 +2,7 @@ import dataclasses
 import itertools
 import math
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Generic, Self
+from typing import TYPE_CHECKING, Generic, Self, overload
 
 from image2ascii.color import Vi
 from image2ascii.enums import RoundMethod
@@ -11,7 +11,7 @@ from image2ascii.types import ImageArray, NumberT
 
 
 if TYPE_CHECKING:
-    from image2ascii.geometry import AbstractSize
+    from image2ascii.geometry import AbstractSize, MarginsF, Size, SizeF, PointF
 
 
 class AbstractSubRect(ABC, Generic[NumberT]):
@@ -157,6 +157,15 @@ class AbstractSubRect2(ABC, Generic[NumberT]):
     @abstractmethod
     def size(self) -> "AbstractSize[NumberT]": ...
 
+    def __add__(self, other: "AbstractSubRect2"):
+        return SubRectF2(
+            outer=self.outer,
+            left=self.left + other.left,
+            upper=self.upper + other.upper,
+            right=min(self.right, other.right),
+            lower=min(self.lower, other.lower),
+        )
+
     @abstractmethod
     def __mul__(self, other: "float | int | AbstractSize") -> "AbstractSubRect2": ...
 
@@ -170,13 +179,12 @@ class AbstractSubRect2(ABC, Generic[NumberT]):
         return self.__repr__()
 
 
-@dataclasses.dataclass
 class SubRectF2(AbstractSubRect2[float]):
     outer: "AbstractSize[float]"
-    left: float
-    upper: float
-    right: float
-    lower: float
+    left: float = 0
+    upper: float = 0
+    right: float = 0
+    lower: float = 0
 
     @property
     def size(self):
@@ -187,6 +195,20 @@ class SubRectF2(AbstractSubRect2[float]):
     @property
     def tuple(self):
         return (float(self.left), float(self.upper), float(self.right), float(self.lower))
+
+    def __init__(
+        self,
+        outer: "AbstractSize[float]",
+        left: float = 0,
+        upper: float = 0,
+        right: float | None = None,
+        lower: float | None = None,
+    ):
+        self.outer = outer
+        self.left = left
+        self.upper = upper
+        self.right = right if right is not None else outer.width
+        self.lower = lower if lower is not None else outer.height
 
     @timer
     def __mul__(self, other: "float | int | AbstractSize") -> "SubRectF2":
@@ -211,16 +233,18 @@ class SubRectF2(AbstractSubRect2[float]):
         )
 
     @timer
-    def to_subrect(self, method: RoundMethod = RoundMethod.FLOOR, round_for_ratio: bool = False) -> "SubRect":
+    def to_subrect(self, method: RoundMethod = RoundMethod.FLOOR, round_for_ratio: bool = False) -> "SubRect2":
+        outer = self.outer.to_size(method=method, round_for_ratio=round_for_ratio)
         if round_for_ratio:
             values = [[math.floor(value), math.ceil(value)] for value in self.tuple]
             subrects = sorted(
-                [SubRect(*args) for args in itertools.product(*values)],
+                [SubRect2(outer, *args) for args in itertools.product(*values)],
                 key=lambda s: abs(s.size.ratio - self.size.ratio),
             )
             return subrects[0]
 
-        return SubRect(
+        return SubRect2(
+            outer=outer,
             left=method.round(self.left),
             upper=method.round(self.upper),
             right=method.round(self.right),
@@ -231,10 +255,10 @@ class SubRectF2(AbstractSubRect2[float]):
 @dataclasses.dataclass
 class SubRect2(AbstractSubRect2[int]):
     outer: "AbstractSize[int]"
-    left: int
-    upper: int
-    right: int
-    lower: int
+    left: int = 0
+    upper: int = 0
+    right: int = 0
+    lower: int = 0
 
     @property
     def size(self):
@@ -245,6 +269,12 @@ class SubRect2(AbstractSubRect2[int]):
     @property
     def tuple(self):
         return (self.left, self.upper, self.right, self.lower)
+
+    @overload
+    def __mul__(self, other: "int | Size") -> "SubRect2": ...
+
+    @overload
+    def __mul__(self, other: "float | SizeF") -> "SubRectF2": ...
 
     @timer
     def __mul__(self, other: "float | int | AbstractSize") -> "AbstractSubRect2":
@@ -293,3 +323,44 @@ class SubRect2(AbstractSubRect2[int]):
                 break
 
         return cls(Size(width, height), left, upper, right, lower)
+
+
+@dataclasses.dataclass
+class RectF:
+    x: float
+    y: float
+    width: float
+    height: float
+
+    @property
+    def bottom(self):
+        return self.y + self.height
+
+    @property
+    def right(self):
+        return self.x + self.width
+
+    @property
+    def size(self):
+        from image2ascii.geometry import SizeF
+        return SizeF(self.width, self.height)
+
+    def __add__(self, other: "MarginsF"):
+        from image2ascii.geometry import PointF
+
+        return RectF.from_points(
+            top_left=PointF(self.x - other.left, self.y - other.top),
+            bottom_right=PointF(self.right + other.right, self.bottom + other.bottom)
+        )
+
+    def __sub__(self, other: "MarginsF"):
+        from image2ascii.geometry import PointF
+
+        return RectF.from_points(
+            top_left=PointF(self.x + other.left, self.y + other.top),
+            bottom_right=PointF(self.right - other.right, self.bottom - other.bottom),
+        )
+
+    @classmethod
+    def from_points(cls, top_left: "PointF", bottom_right: "PointF"):
+        return cls(x=top_left.x, y=top_left.y, width=bottom_right.x - top_left.x, height=bottom_right.y - top_left.y)

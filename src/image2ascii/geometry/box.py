@@ -71,8 +71,8 @@ class PositionedBoxF(AbstractPositionedBox[float]):
         return PositionedBoxF(
             size=self.size,
             viewport=self.viewport,
-            top=round(hidden_height * y * -1, 8),
-            left=round(hidden_width * x * -1, 8),
+            top=round(hidden_height * -y, 8),
+            left=round(hidden_width * -x, 8),
         )
 
     @timer

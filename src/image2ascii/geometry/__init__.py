@@ -1,4 +1,5 @@
 from .box import PositionedBox, PositionedBoxF, PositionedBoxPartition
+from .margins import Margins, MarginsF
 from .point import OptionalPointF, Point, PointF
 from .rect import SubRect, SubRect2, SubRectF, SubRectF2
 from .shape import DefaultShapes, EmptyShape, FilledShape, PolygonShape, ShapeSet, SolidShapes
@@ -10,6 +11,8 @@ __all__ = [
     "DefaultShapes",
     "EmptyShape",
     "FilledShape",
+    "Margins",
+    "MarginsF",
     "OptionalPointF",
     "Point",
     "PointF",

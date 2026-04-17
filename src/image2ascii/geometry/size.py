@@ -13,7 +13,7 @@ from image2ascii.utils import partition
 
 
 if TYPE_CHECKING:
-    from image2ascii.geometry import PointF, PositionedBoxPartition, SubRectF
+    from image2ascii.geometry import OptionalPointF, PointF, PositionedBoxPartition, SubRectF
 
 
 class AbstractSize(ABC, Generic[NumberT]):
@@ -81,11 +81,28 @@ class AbstractSize(ABC, Generic[NumberT]):
     def __truediv__(self, other: "AbstractSize") -> "SizeF":
         return SizeF(self.width / other.width, self.height / other.height)
 
+    def crop(self, container: "AbstractSize", center: "PointF | None" = None):
+        from image2ascii.geometry import PointF, SubRectF2
+
+        center = center or PointF(0.5, 0.5)
+        left = max(self.width - container.width, 0) * center.x
+        upper = max(self.height - container.height, 0) * center.y
+        right = left + min(container.width, self.width)
+        lower = upper + min(container.height, self.height)
+
+        return SubRectF2(self, left, upper, right, lower)
+
     @timer
     def fit_inside(self, other: "AbstractSize", grow: bool = True) -> "SizeF":
         if not grow and self.width <= other.width and self.height <= other.height:
             return self.to_size_f()
         if self.ratio < other.ratio:
+            return SizeF(round(other.height * self.ratio, 8), other.height)
+        return SizeF(other.width, round(other.width / self.ratio, 8))
+
+    @timer
+    def fit_outside(self, other: "AbstractSize") -> "SizeF":
+        if self.ratio > other.ratio:
             return SizeF(round(other.height * self.ratio, 8), other.height)
         return SizeF(other.width, round(other.width / self.ratio, 8))
 
@@ -96,7 +113,7 @@ class AbstractSize(ABC, Generic[NumberT]):
         return SizeF(self.width, self.width / ratio)
 
     @abstractmethod
-    def to_size(self, method: RoundMethod = RoundMethod.FLOOR) -> "Size": ...
+    def to_size(self, method: RoundMethod = RoundMethod.FLOOR, round_for_ratio: bool = False) -> "Size": ...
 
     @abstractmethod
     def to_size_f(self) -> "SizeF": ...
@@ -237,7 +254,7 @@ class Size(AbstractSize[int]):
 
             top += height
 
-    def to_size(self, method: RoundMethod = RoundMethod.FLOOR) -> "Size":
+    def to_size(self, method: RoundMethod = RoundMethod.FLOOR, round_for_ratio: bool = False) -> "Size":
         return self
 
     def to_size_f(self) -> "SizeF":

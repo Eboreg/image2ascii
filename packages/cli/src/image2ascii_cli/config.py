@@ -26,7 +26,7 @@ class Config(
     cli_prog_name="i2a",
     cli_parse_none_str="none",
 ):
-    filename: CliPositionalArg[str] = ""
+    filename: CliPositionalArg[str]
     outfile: str | None = Field(description="Image file to write the results to", default=None)
     outfile_size: int = Field(
         default=1000,
@@ -61,7 +61,6 @@ class Config(
     )
     border_color: NullableColorType = None
     debug: bool = False
-    
 
     model_config = SettingsConfigDict(
         cli_shortcuts={
@@ -107,6 +106,7 @@ class Config(
                 border_color=self.border_color or self.default_color,
             )
             horse.prepare_and_render(renderer)
+            # horse.zoom(4.0)
             # ascii.prepare_and_render(renderer, zoom=self.zoom, center=(self.x, self.y))
             print()
 

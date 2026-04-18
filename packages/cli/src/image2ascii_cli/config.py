@@ -1,9 +1,18 @@
 import logging
 
 from PIL import Image
-from pydantic import Field
-from pydantic_settings import CliPositionalArg, CliToggleFlag, SettingsConfigDict
+from pydantic import AliasChoices, Field
+from pydantic_settings import (
+    BaseSettings,
+    CliApp,
+    CliPositionalArg,
+    CliSubCommand,
+    CliToggleFlag,
+    SettingsConfigDict,
+    get_subcommand,
+)
 
+from image2ascii.color import ANSI_COLORS, ANSI_RESET_FG
 from image2ascii.config import Config as BaseConfig
 from image2ascii.config_types import NullableColorType
 from image2ascii.enums import ColorInferenceMethod
@@ -15,23 +24,7 @@ from image2ascii.workhorse import Workhorse
 logger = logging.getLogger(__name__)
 
 
-class Config(
-    BaseConfig,
-    cli_parse_args=True,
-    cli_implicit_flags="dual",
-    cli_kebab_case=True,
-    cli_ignore_unknown_args=True,
-    cli_avoid_json=True,
-    cli_enforce_required=True,
-    cli_prog_name="i2a",
-    cli_parse_none_str="none",
-):
-    filename: CliPositionalArg[str]
-    outfile: str | None = Field(description="Image file to write the results to", default=None)
-    outfile_size: int = Field(
-        default=1000,
-        description="Width or height (whichever one is largest) of the file produced by '--outfile'",
-    )
+class CliConvertConfig(BaseConfig, validate_assignment=True):
     zoom: float = Field(default=1, gt=0)
     x: float = Field(default=0.5, ge=0, le=1, description="Relative X position to zoom in on")
     y: float = Field(default=0.5, ge=0, le=1, description="Relative Y position to zoom in on")
@@ -60,20 +53,32 @@ class Config(
         description="Only valid for console output. Adds a nice border.",
     )
     border_color: NullableColorType = None
-    debug: bool = False
 
     model_config = SettingsConfigDict(
         cli_shortcuts={
             "viewport-columns": ["cols", "c"],
             "viewport-rows": ["rows", "r"],
-            "outfile": "o",
             "background": "bg",
         },
     )
 
-    def cli_cmd(self):
+
+class CliFileConvertConfig(CliConvertConfig, validate_assignment=True):
+    filename: CliPositionalArg[str]
+    outfile: str | None = Field(
+        description="Image file to write the results to",
+        default=None,
+        validation_alias=AliasChoices("o", "outfile"),
+    )
+    outfile_size: int = Field(
+        default=1000,
+        description="Width or height (whichever one is largest) of the file produced by '--outfile'",
+    )
+
+    def cli(self):
         if self.debug:
             from image2ascii import timing
+
             timing.TIMING_ENABLED = True
 
         if self.fastest:
@@ -106,3 +111,45 @@ class Config(
 
         if self.debug:
             print_results()
+
+
+class Cli(
+    BaseSettings,
+    cli_parse_args=True,
+    cli_implicit_flags="dual",
+    cli_kebab_case=True,
+    cli_ignore_unknown_args=True,
+    cli_avoid_json=True,
+    cli_enforce_required=True,
+    cli_prog_name="i2a",
+    cli_parse_none_str="none",
+):
+    conv: CliSubCommand[CliFileConvertConfig] = Field(description="Convert a file")
+    colors: CliSubCommand[BaseSettings] = Field(description="A little colour guide")
+
+    def cli_cmd(self):
+        if not get_subcommand(self, is_required=False):
+            CliApp.print_help(self)
+
+        if self.colors:
+            self.print_color_guide()
+        elif self.conv:
+            self.conv.cli()
+
+    def print_color_guide(self):
+        print("When setting colours in the config file or via CLI, you can use the following formats:")
+        print()
+        print(" * CSS RGB colour strings ('#RRGGBB' or '#RGB', with or without the '#')")
+        print(" * 'R,G,B' or '(R, G, B)'")
+        print(" * Any of the following ANSI colour constants (case insensitive):")
+        print()
+
+        standard_ansi = [c for c in ANSI_COLORS if c.code < 90]
+        bright_ansi = [c for c in ANSI_COLORS if c.code >= 90]
+
+        for standard, bright in zip(standard_ansi, bright_ansi, strict=False):
+            print(f"  {standard.ansi}██{ANSI_RESET_FG} {standard.name:20s}", end="")
+            print(f"{bright.ansi}██{ANSI_RESET_FG} {bright.name}")
+
+        print()
+        print("(Yes, I spell it 'colour' in text but 'color' in code. That's just something I do.)")

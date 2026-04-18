@@ -1,6 +1,6 @@
 [project]
 name = "image2ascii-cli"
-version = "0.5.0"
+version = "0.6.0"
 description = "Adds `i2a` CLI command to `image2ascii-core`."
 readme = "README.md"
 authors = [

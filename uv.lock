@@ -323,7 +323,7 @@ wheels = [
 
 [[package]]
 name = "image2ascii"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "." }
 dependencies = [
     { name = "cairosvg" },
@@ -376,7 +376,7 @@ emoji = [{ name = "image2ascii-emoji", editable = "packages/emoji" }]
 
 [[package]]
 name = "image2ascii-cli"
-version = "0.5.0"
+version = "0.6.0"
 source = { editable = "packages/cli" }
 dependencies = [
     { name = "image2ascii" },

@@ -26,10 +26,12 @@ def import_path(path: str):
     return getattr(module, member_name)
 
 
-def serialize_color(value: Color) -> str:
+def serialize_color(value: Color | None) -> str | None:
     if isinstance(value, AnsiColor):
         return value.name
-    return value.css
+    if isinstance(value, Color):
+        return value.css
+    return None
 
 
 def serialize_color_converter(value: type[AbstractColorConverter]):

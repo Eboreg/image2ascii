@@ -2,7 +2,7 @@ from typing import Literal, Self
 
 import platformdirs
 from PIL.Image import Resampling
-from pydantic import Field, create_model
+from pydantic import BaseModel, ConfigDict, Field, create_model
 from pydantic_settings import (
     BaseSettings,
     CliToggleFlag,
@@ -38,7 +38,7 @@ def get_app_dirs():
     return platformdirs.PlatformDirs("image2ascii", ensure_exists=True)
 
 
-class TransparencyConfig(BaseSettings, validate_assignment=True):
+class Transparency(BaseModel, validate_assignment=True):
     disable: CliToggleFlag[bool] = Field(default=False, description="Disable all transparency (boring but efficient)")
     methods: list[Literal["bgdistance", "brightness", "alpha"]] = Field(
         default=["bgdistance", "brightness", "alpha"],
@@ -79,7 +79,7 @@ class TransparencyConfig(BaseSettings, validate_assignment=True):
         description="Pixels darker than this will be treated as transparent (scale: 0-255)",
     )
 
-    model_config = SettingsConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore")
 
     def use_bgdistance(self, has_background: bool):
         return not self.disable and "bgdistance" in self.methods and self.bg_distance > 0 and has_background
@@ -129,6 +129,7 @@ class Config(BaseSettings, validate_assignment=True):
     )
     contrast: float = Field(default=1.0)
     crop: bool = Field(default=False, description="Remove any empty spaces around the result")
+    debug: bool = False
     default_color: NullableColorType = Field(
         default=None,
         description="Fill colour to use when there is no other available."
@@ -156,7 +157,7 @@ class Config(BaseSettings, validate_assignment=True):
         ),
     )
     sharpness: float = Field(default=1.0)
-    transparency: TransparencyConfig = Field(default_factory=TransparencyConfig, alias="trans")
+    transparency: Transparency = Field(default_factory=Transparency, alias="trans")
     viewport_columns: int = Field(
         default=DEFAULT_VIEWPORT_COLUMNS,
         gt=0,

@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from typing import TypedDict
 
 
-TIMING_ENABLED = False
+TIMING_ENABLED: bool = False
 
 timings: "list[TimingDict]" = []
 running_timings: "list[TimingDict]" = []
@@ -103,7 +103,7 @@ class TimingResult:
         child_count = sum(c.executions for c in self.collect()) - self.executions
 
         print(
-            f"{prefix}{self.name:{50 - indent}s} {self.executions:7d} {child_count:8d}  "
+            f"{prefix}{self.name:{46 - indent}.{46 - indent}s} {self.executions:7d} {child_count:8d}  "
             f"{ff(self.average_own_time):12s} {ff(self.average_time):12s} {ff(self.total_own_time):12s} "
             f"{ff(self.total_time):12s} {percent_own_time:8.4f} {percent_total:8.4f}"
         )
@@ -114,13 +114,11 @@ class TimingResult:
 
     @classmethod
     def print_header(cls):
+        print("AT = avg time | TT = total time | %TT = % total time | #CH = # children")
+        print("*:O = excl children | *:T = incl children")
         print(
-            "AOT = avg own time  AT = avg time  TOT = total own time  TT = total time  %OT = % own time  "
-            "%TT = % total time  #CH = # children"
-        )
-        print(
-            "Function                                                 #      #CH  AOT          AT           "
-            "TOT          TT                %OT       %T"
+            "Function                                             #      #CH  AT:O         AT:T         "
+            "TT:O         TT:T            %TT:O    %TT:T"
         )
         print(
             "---------------------------------------------------------------------------------------------------------"

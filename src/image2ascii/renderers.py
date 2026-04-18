@@ -6,22 +6,23 @@ from typing import TYPE_CHECKING, ClassVar, TextIO
 
 from PIL import Image, ImageDraw, ImageFont
 
-from image2ascii.color import ANSI_RESET_ALL, ANSI_RESET_FG, Color
-from image2ascii.geometry import Size, SizeF
+from image2ascii.color import ANSI_RESET_ALL, ANSI_RESET_FG
+from image2ascii.geometry import SizeF
 from image2ascii.timing import timer
 
 
 if TYPE_CHECKING:
     from image2ascii.character import Character
+    from image2ascii.color import Color
+    from image2ascii.geometry import Size
 
 
 class AbstractRenderer(ABC):
-    background: Color | None
+    background: "Color | None"
     original_ratio: float
-    size_chars_rounded: Size
-    size_chars: SizeF
+    size_chars: "Size"
 
-    current_color: Color | None = None
+    current_color: "Color | None" = None
     current_row: int | None = None
 
     def finish(self):
@@ -34,7 +35,7 @@ class AbstractRenderer(ABC):
 
     def on_line_break(self): ...
 
-    def on_new_color(self, color: Color | None, old_color: Color | None = None): ...
+    def on_new_color(self, color: "Color | None", old_color: "Color | None" = None): ...
 
     def on_row_end(self): ...
 
@@ -58,10 +59,11 @@ class AbstractRenderer(ABC):
         self.on_character(character)
 
     @timer
-    def start(self, original_ratio: float, size_chars: SizeF, background: Color | None = None):
+    def start(self, original_ratio: float, size_chars: "Size", background: "Color | None" = None):
+        self.current_color = None
+        self.current_row = None
         self.original_ratio = original_ratio
         self.size_chars = size_chars
-        self.size_chars_rounded = size_chars.to_size(round_for_ratio=True)
         self.background = background
         self.on_start()
 
@@ -100,7 +102,7 @@ class ConsoleRenderer(AbstractStringRenderer):
         outstream: TextIO = sys.stdout,
         margins: int = 0,
         border: bool = False,
-        border_color: Color | None = None,
+        border_color: "Color | None" = None,
     ):
         super().__init__(outstream)
         self.horizontal_margins = margins
@@ -115,14 +117,14 @@ class ConsoleRenderer(AbstractStringRenderer):
         for _ in range(int(self.margins / 2)):
             self.on_line_break()
             self.on_row_start()
-            self.output(" " * self.size_chars_rounded.width)
+            self.output(" " * self.size_chars.width)
             self.on_row_end()
 
         if self.border:
             self.on_line_break()
             self.output_lower_border()
 
-        self.output(ANSI_RESET_ALL)
+        self.on_line_break()
 
     @timer
     def on_line_break(self):
@@ -162,7 +164,7 @@ class ConsoleRenderer(AbstractStringRenderer):
 
     @timer
     def on_start(self):
-        self.width_with_margins = self.size_chars_rounded.width + (self.margins * 2)
+        self.width_with_margins = self.size_chars.width + (self.margins * 2)
 
         if self.border:
             self.output_upper_border()
@@ -170,7 +172,7 @@ class ConsoleRenderer(AbstractStringRenderer):
 
         for _ in range(int(self.margins / 2)):
             self.on_row_start()
-            self.output(" " * self.size_chars_rounded.width)
+            self.output(" " * self.size_chars.width)
             self.on_row_end()
             self.on_line_break()
 
@@ -256,7 +258,7 @@ class ImageRenderer(AbstractRenderer):
     @timer
     def on_start(self):
         outfile_size = (
-            Size(self.outfile_largest_side, self.outfile_largest_side)
+            SizeF(self.outfile_largest_side, self.outfile_largest_side)
             .fit_ratio(self.original_ratio)
             .to_size(round_for_ratio=True)
         )
@@ -267,8 +269,8 @@ class ImageRenderer(AbstractRenderer):
         self.column_gap = int(outfile_size.width / self.size_chars.width)
 
         # Then we have to adjust the output size a little:
-        outfile_size.width = self.column_gap * self.size_chars_rounded.width
-        outfile_size.height = self.row_gap * self.size_chars_rounded.height
+        outfile_size.width = self.column_gap * self.size_chars.width
+        outfile_size.height = self.row_gap * self.size_chars.height
 
         self.font = ImageFont.truetype(str(self.font_path), size=self.row_gap * 0.75)
         self.image = Image.new(

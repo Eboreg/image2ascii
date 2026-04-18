@@ -1,11 +1,11 @@
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from PIL import Image
-
 from image2ascii.types import ImageArray
 
 
 if TYPE_CHECKING:
+    from PIL import Image
+
     from image2ascii.config import Config
 
 
@@ -21,14 +21,14 @@ class BasePlugin(Generic[_Config]):
     def start(self, config: _Config):
         ...
 
-    def pre_enhance(self, image: Image.Image) -> Image.Image | None:
+    def pre_enhance(self, image: "Image.Image") -> "Image.Image | None":
         return None
 
-    def post_enhance(self, image: Image.Image) -> Image.Image | None:
+    def post_enhance(self, image: "Image.Image") -> "Image.Image | None":
         return None
 
-    def pre_create_matrix(self, image: Image.Image, matrix: ImageArray) -> ImageArray | None:
+    def pre_create_matrix(self, image: "Image.Image", matrix: ImageArray) -> ImageArray | None:
         return None
 
-    def post_create_matrix(self, image: Image.Image, matrix: ImageArray) -> ImageArray | None:
+    def post_create_matrix(self, image: "Image.Image", matrix: ImageArray) -> ImageArray | None:
         return None

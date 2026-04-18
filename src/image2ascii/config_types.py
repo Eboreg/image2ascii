@@ -2,7 +2,7 @@ import importlib
 from typing import Annotated, Any
 
 import numpy as np
-from PIL import Image
+from PIL.Image import Resampling
 from pydantic import BeforeValidator, PlainSerializer
 
 from image2ascii.color import AnsiColor, Color
@@ -13,8 +13,7 @@ from image2ascii.color_converters import (
     GrayScaleColorConverter,
     NullColorConverter,
 )
-from image2ascii.geometry import ShapeSet
-from image2ascii.geometry.shape import DefaultShapes, SolidShapes
+from image2ascii.geometry import DefaultShapes, ShapeSet, SolidShapes
 
 
 def import_path(path: str):
@@ -43,7 +42,7 @@ def serialize_importable(value: type) -> str:
     return value.__module__ + "." + value.__name__
 
 
-def serialize_resample(value: Image.Resampling) -> str:
+def serialize_resample(value: Resampling) -> str:
     return value.name
 
 
@@ -82,10 +81,10 @@ def validate_color_converter(value: Any) -> type[AbstractColorConverter]:
     raise ValueError(f"Expected a color converter class, found {value}")
 
 
-def validate_resample(value: Any) -> Image.Resampling:
-    if isinstance(value, Image.Resampling):
+def validate_resample(value: Any) -> Resampling:
+    if isinstance(value, Resampling):
         return value
-    return Image.Resampling[value]
+    return Resampling[value]
 
 
 def validate_shapeset(value: Any) -> type[ShapeSet]:
@@ -119,7 +118,7 @@ NullableColorType = Annotated[
 ]
 
 ResampleType = Annotated[
-    Image.Resampling,
+    Resampling,
     PlainSerializer(serialize_resample, return_type=str),
     BeforeValidator(validate_resample),
 ]

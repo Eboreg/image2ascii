@@ -1,13 +1,13 @@
 from importlib.metadata import entry_points
 from typing import TYPE_CHECKING, ClassVar, TypeVar
 
-from PIL import Image
-
 from image2ascii.timing import timer
 from image2ascii.types import ImageArray
 
 
 if TYPE_CHECKING:
+    from PIL import Image
+
     from image2ascii.config import Config
     from image2ascii.plugin import BasePlugin
 
@@ -58,7 +58,7 @@ class Registry:
             self.plugins.append(plugin_class(config))
 
     @timer
-    def pre_enhance(self, image: Image.Image) -> Image.Image:
+    def pre_enhance(self, image: "Image.Image") -> "Image.Image":
         for plugin in self.plugins:
             if new_image := plugin.pre_enhance(image):
                 image = new_image
@@ -66,7 +66,7 @@ class Registry:
         return image
 
     @timer
-    def post_enhance(self, image: Image.Image) -> Image.Image:
+    def post_enhance(self, image: "Image.Image") -> "Image.Image":
         for plugin in self.plugins:
             if new_image := plugin.post_enhance(image):
                 image = new_image
@@ -74,7 +74,7 @@ class Registry:
         return image
 
     @timer
-    def pre_create_matrix(self, image: Image.Image, matrix: ImageArray) -> ImageArray:
+    def pre_create_matrix(self, image: "Image.Image", matrix: ImageArray) -> ImageArray:
         for plugin in self.plugins:
             new_matrix = plugin.pre_create_matrix(image, matrix)
             if new_matrix is not None:
@@ -83,7 +83,7 @@ class Registry:
         return matrix
 
     @timer
-    def post_create_matrix(self, image: Image.Image, matrix: ImageArray) -> ImageArray:
+    def post_create_matrix(self, image: "Image.Image", matrix: ImageArray) -> ImageArray:
         for plugin in self.plugins:
             new_matrix = plugin.post_create_matrix(image, matrix)
             if new_matrix is not None:

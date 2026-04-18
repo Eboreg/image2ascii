@@ -1,7 +1,7 @@
 from typing import Literal, Self
 
 import platformdirs
-from PIL import Image
+from PIL.Image import Resampling
 from pydantic import Field, create_model
 from pydantic_settings import (
     BaseSettings,
@@ -20,8 +20,7 @@ from image2ascii.config_types import (
     ShapeSetType,
 )
 from image2ascii.enums import ColorInferenceMethod
-from image2ascii.geometry import Size, SizeF
-from image2ascii.geometry.shape import DefaultShapes
+from image2ascii.geometry import DefaultShapes, Size, SizeF
 
 
 DEFAULT_CHAR_RATIO = 0.469
@@ -148,7 +147,7 @@ class Config(BaseSettings, validate_assignment=True):
         gt=0,
         description="Higher value = more accurate results but also slower",
     )
-    resample: ResampleType = Image.Resampling.NEAREST
+    resample: ResampleType = Resampling.NEAREST
     shapeset: ShapeSetType = Field(
         default=DefaultShapes,
         description=(
@@ -192,9 +191,11 @@ class Config(BaseSettings, validate_assignment=True):
     def extend(cls, other: type["Config"]):
         default_config = BaseSettings.model_config
         model_config = other.model_config.copy()
+
         for key, value in cls.model_config.items():
-            if key not in default_config or value != default_config[key]:
-                model_config[key] = value
+            if key not in default_config or value != default_config[key]:  # type: ignore[ty:invalid-key]
+                model_config[key] = value  # type: ignore[ty:invalid-key]
+
         return create_model(cls.__name__, __base__=(cls, other), __module__=cls.__module__, __config__=model_config)
 
     @classmethod

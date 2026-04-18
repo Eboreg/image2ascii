@@ -1,3 +1,4 @@
+import dataclasses
 from abc import ABC
 from typing import Generic
 
@@ -16,19 +17,16 @@ class AbstractPoint(ABC, Generic[NumberT]):
         return self.__repr__()
 
 
+@dataclasses.dataclass
 class Point(AbstractPoint[int]):
-    def __init__(self, x: int, y: int):
-        self.x = x
-        self.y = y
+    x: int
+    y: int
 
 
+@dataclasses.dataclass
 class PointF(AbstractPoint[float]):
-    def __init__(self, x: float, y: float):
-        self.x = x
-        self.y = y
+    x: float
+    y: float
 
     def to_point(self, method: RoundMethod = RoundMethod.FLOOR) -> "Point":
         return Point(method.round(self.x), method.round(self.y))
-
-
-OptionalPointF = tuple[float, float] | PointF | None

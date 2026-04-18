@@ -89,14 +89,11 @@ class Config(
 
         if self.filename.lower().endswith(".svg"):
             horse = Workhorse.load_svg(self.filename, self)
-            # ascii = AsciiImage.load_svg(self.filename, self)
         else:
             horse = Workhorse.load(self.filename, self)
-            # ascii = AsciiImage.load(self.filename, self)
 
         if self.outfile:
             renderer = ImageRenderer(self.outfile_size)
-            # ascii.prepare_and_render(renderer, zoom=self.zoom, center=(self.x, self.y))
             renderer.image.save(self.outfile)
             logger.info(f"Wrote {self.outfile}.")
         else:
@@ -106,9 +103,6 @@ class Config(
                 border_color=self.border_color or self.default_color,
             )
             horse.prepare_and_render(renderer)
-            # horse.zoom(4.0)
-            # ascii.prepare_and_render(renderer, zoom=self.zoom, center=(self.x, self.y))
-            print()
 
         if self.debug:
             print_results()

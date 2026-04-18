@@ -4,13 +4,12 @@ from fractions import Fraction
 from os import PathLike
 from typing import TYPE_CHECKING
 
-from PIL import Image
-
 from image2ascii.timing import timer
 
 
 if TYPE_CHECKING:
     from _typeshed import SupportsRichComparisonT
+    from PIL import Image
 
 
 @timer
@@ -45,7 +44,7 @@ def hash_file(path: PathLike) -> str:
     return sha256.hexdigest()
 
 
-def hash_image(image: Image.Image) -> str:
+def hash_image(image: "Image.Image") -> str:
     sha256 = hashlib.sha256(image.tobytes())
     return sha256.hexdigest()
 

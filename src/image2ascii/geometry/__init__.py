@@ -1,31 +1,24 @@
-from .box import PositionedBox, PositionedBoxF, PositionedBoxPartition
-from .margins import Margins, MarginsF
-from .point import OptionalPointF, Point, PointF
-from .rect import SubRect, SubRect2, SubRectF, SubRectF2
+from .point import Point, PointF
+from .rect import Rect, RectF
 from .shape import DefaultShapes, EmptyShape, FilledShape, PolygonShape, ShapeSet, SolidShapes
-from .size import AbstractSize, Size, SizeF
+from .size import IndexedSizePartition, Size, SizeF
+from .subrect import SubRect, SubRectF
 
 
 __all__ = [
-    "AbstractSize",
     "DefaultShapes",
     "EmptyShape",
     "FilledShape",
-    "Margins",
-    "MarginsF",
-    "OptionalPointF",
+    "IndexedSizePartition",
     "Point",
     "PointF",
     "PolygonShape",
-    "PositionedBox",
-    "PositionedBoxF",
-    "PositionedBoxPartition",
+    "Rect",
+    "RectF",
     "ShapeSet",
     "Size",
     "SizeF",
     "SolidShapes",
     "SubRect",
-    "SubRect2",
     "SubRectF",
-    "SubRectF2",
 ]

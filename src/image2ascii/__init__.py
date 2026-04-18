@@ -1,6 +1,5 @@
 from importlib.metadata import version
 
-from image2ascii.ascii_image import AsciiImage
 from image2ascii.color_converters import (
     AnsiColorConverter,
     FullRGBColorConverter,
@@ -14,7 +13,6 @@ from image2ascii.workhorse import Workhorse
 
 __all__ = [
     "AnsiColorConverter",
-    "AsciiImage",
     "Config",
     "DefaultShapes",
     "FullRGBColorConverter",

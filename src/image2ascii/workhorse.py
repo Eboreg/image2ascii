@@ -212,6 +212,7 @@ class Workhorse:
                 self.__update_visibility(self.image)  # 7.3
 
     def __enhance(self, image: ImagePlus):
+        self.plugins.pre_enhance(image)
         image.enhance(
             brightness=self.config.brightness,
             color_balance=self.config.color_balance,
@@ -219,6 +220,7 @@ class Workhorse:
             sharpness=self.config.sharpness,
             invert=self.config.invert,
         )
+        self.plugins.post_enhance(image)
 
     @timer
     def __get_character(self, matrix: ImageArray, rect: "IndexedSizePartition") -> Character:

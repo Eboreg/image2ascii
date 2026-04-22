@@ -1,8 +1,9 @@
 import hashlib
+from collections.abc import Sequence
 from decimal import Decimal
 from fractions import Fraction
 from os import PathLike
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 from image2ascii.timing import timer
 
@@ -10,6 +11,9 @@ from image2ascii.timing import timer
 if TYPE_CHECKING:
     from _typeshed import SupportsRichComparisonT
     from PIL import Image
+
+
+_T = TypeVar("_T")
 
 
 @timer
@@ -91,5 +95,22 @@ def partition(value: int, num_parts: int):
 
     assert sum(result) == value, f"sum(result) should be {value} but is {sum(result)}"
     assert len(result) == num_parts, f"len(result) should be {num_parts} but is {len(result)}"
+
+    return result
+
+
+def split_list(lst: Sequence[_T], deliminators: _T | Sequence[_T]) -> list[Sequence[_T]]:
+    if not isinstance(deliminators, Sequence):
+        deliminators = [deliminators]
+    result: list[Sequence[_T]] = []
+    start_idx = 0
+
+    for idx in range(len(lst)):
+        if lst[idx] in deliminators:
+            if idx > start_idx:
+                result.append(lst[start_idx:idx])
+            start_idx = idx + 1
+        elif idx == len(lst) - 1:
+            result.append(lst[start_idx:])
 
     return result

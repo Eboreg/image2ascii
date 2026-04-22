@@ -44,8 +44,8 @@ def serialize_importable(value: type) -> str:
     return value.__module__ + "." + value.__name__
 
 
-def serialize_resample(value: Resampling) -> str:
-    return value.name
+def serialize_resample(value: int) -> str:
+    return Resampling(value).name
 
 
 def serialize_shapeset(value: type[ShapeSet]):
@@ -83,10 +83,15 @@ def validate_color_converter(value: Any) -> type[AbstractColorConverter]:
     raise ValueError(f"Expected a color converter class, found {value}")
 
 
-def validate_resample(value: Any) -> Resampling:
+def validate_resample(value: str | Resampling) -> Resampling:
     if isinstance(value, Resampling):
         return value
-    return Resampling[value]
+    value = value.upper()
+    if value in Resampling.__members__:
+        return Resampling[value]
+    if value in Resampling:
+        return Resampling(value)
+    raise ValueError
 
 
 def validate_shapeset(value: Any) -> type[ShapeSet]:

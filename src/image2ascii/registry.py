@@ -2,14 +2,12 @@ from importlib.metadata import entry_points
 from typing import TYPE_CHECKING, ClassVar, TypeVar
 
 from image2ascii.timing import timer
-from image2ascii.types import ImageArray
 
 
 if TYPE_CHECKING:
-    from PIL import Image
-
     from image2ascii.config import Config
-    from image2ascii.plugin import BasePlugin
+    from image2ascii.image import ImagePlus
+    from image2ascii.plugin import BaseCliSubCommand, BasePlugin
 
 
 _Config = TypeVar("_Config", bound="Config")
@@ -24,10 +22,21 @@ class Registry:
     @timer
     def extend_config_class(cls, base: type[_Config]):
         result = base
+
         for plugin_class in cls.get_plugin_classes():
             if plugin_class.config_class is not None and plugin_class.config_class is not base:
                 result = base.extend(plugin_class.config_class)
+
         return result
+
+    @classmethod
+    def get_cli_subcommands(cls):
+        subcommands: dict[str, type["BaseCliSubCommand"]] = {}
+
+        for plugin_class in cls.get_plugin_classes():
+            subcommands.update(plugin_class.cli_subcommands)
+
+        return subcommands
 
     @classmethod
     @timer
@@ -58,35 +67,11 @@ class Registry:
             self.plugins.append(plugin_class(config))
 
     @timer
-    def pre_enhance(self, image: "Image.Image") -> "Image.Image":
+    def pre_enhance(self, image: "ImagePlus"):
         for plugin in self.plugins:
-            if new_image := plugin.pre_enhance(image):
-                image = new_image
-
-        return image
+            plugin.pre_enhance(image)
 
     @timer
-    def post_enhance(self, image: "Image.Image") -> "Image.Image":
+    def post_enhance(self, image: "ImagePlus"):
         for plugin in self.plugins:
-            if new_image := plugin.post_enhance(image):
-                image = new_image
-
-        return image
-
-    @timer
-    def pre_create_matrix(self, image: "Image.Image", matrix: ImageArray) -> ImageArray:
-        for plugin in self.plugins:
-            new_matrix = plugin.pre_create_matrix(image, matrix)
-            if new_matrix is not None:
-                matrix = new_matrix
-
-        return matrix
-
-    @timer
-    def post_create_matrix(self, image: "Image.Image", matrix: ImageArray) -> ImageArray:
-        for plugin in self.plugins:
-            new_matrix = plugin.post_create_matrix(image, matrix)
-            if new_matrix is not None:
-                matrix = new_matrix
-
-        return matrix
+            plugin.post_enhance(image)

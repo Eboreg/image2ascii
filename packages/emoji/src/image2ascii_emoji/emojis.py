@@ -1,13 +1,21 @@
 import dataclasses
 import re
+import tempfile
+import zipfile
 from os import PathLike
 from pathlib import Path
 
 import requests
 
+from image2ascii.config import get_app_dirs
+
 
 EMOJI_TEST_URL = "https://www.unicode.org/Public/UCD/latest/emoji/emoji-test.txt"
-EMOJI_JSON_URL = "https://github.com/googlefonts/emoji-metadata/blob/main/emoji_17_0_ordering.json"
+EMOJI_JSON_URL = "https://raw.githubusercontent.com/googlefonts/emoji-metadata/refs/heads/main/emoji_17_0_ordering.json"
+NOTO_EMOJI_REPO_URL = "https://github.com/googlefonts/noto-emoji/archive/refs/heads/main.zip"
+SVG_PATH = get_app_dirs().user_data_path / "svg"
+EMOJI_PATH = SVG_PATH / "emojis"
+FLAG_PATH = SVG_PATH / "flags"
 
 
 @dataclasses.dataclass
@@ -48,9 +56,8 @@ class Emoji:
             except Exception:
                 return None
 
-        # 0x1f3f4 = 127988 = indikerar att detta är regionflagga m bindestreck
-        # 917607 = "G"
-        # 0xe007f = 917631 = avslutar alltid sådana av ngn orsak
+        # 0x1f3f4 = 127988 = indicates that this is a regional flag with a dash
+        # 0xe007f = 917631 = always finishes such codepoints for some reason
         if len(self.codepoints) >= 6 and self.codepoints[0] == 0x1f3f4 and self.codepoints[-1] == 0xe007f:
             code = "".join(chr(i - 0xe0020) for i in self.codepoints[1:-1])
             return f"{code[:2]}-{code[2:]}"
@@ -89,7 +96,7 @@ class Emoji:
 @dataclasses.dataclass
 class EmojiSubgroup:
     name: str
-    emojis: list["Emoji"] = dataclasses.field(default_factory=list)
+    emojis: list["Emoji"] = dataclasses.field(default_factory=list, repr=False)
 
     @property
     def all_emojis(self) -> list["Emoji"]:
@@ -102,7 +109,7 @@ class EmojiSubgroup:
 @dataclasses.dataclass
 class EmojiGroup:
     name: str
-    subgroups: list["EmojiSubgroup"] = dataclasses.field(default_factory=list)
+    subgroups: list["EmojiSubgroup"] = dataclasses.field(default_factory=list, repr=False)
 
     @property
     def all_emojis(self) -> list["Emoji"]:
@@ -119,7 +126,12 @@ def find_emoji(emojis: list["Emoji"], codepoints: list[int]):
     return None
 
 
-def read_emoji_test_txt(svg_dir: PathLike | str, flag_dir: PathLike | str, url: str = EMOJI_TEST_URL):
+def read_emoji_test_txt(
+    svg_dir: PathLike | str | Path = EMOJI_PATH,
+    flag_dir: PathLike | str | Path = FLAG_PATH,
+    url: str = EMOJI_TEST_URL,
+) -> list["EmojiGroup"]:
+    # First this ...
     svg_dir = Path(svg_dir)
     flag_dir = Path(flag_dir)
     emoji_re = re.compile(r"^(?P<codepoints>.*?) *; (?P<status>.*?) *# (?:.*?) (?P<ucd_version>.*?) (?P<name>.*)$")
@@ -154,7 +166,8 @@ def read_emoji_test_txt(svg_dir: PathLike | str, flag_dir: PathLike | str, url: 
     return groups
 
 
-def update_from_emoji_json(groups: list["EmojiGroup"], url: str = EMOJI_JSON_URL):
+def update_from_emoji_json(groups: list["EmojiGroup"], url: str = EMOJI_JSON_URL) -> list["EmojiGroup"]:
+    # ... then this.
     def update_emoji(emoji: "Emoji", json_emoji: dict):
         emoji.shortcodes = json_emoji["shortcodes"].copy()
         emoji.emoticons = json_emoji["emoticons"].copy()
@@ -191,3 +204,34 @@ def update_from_emoji_json(groups: list["EmojiGroup"], url: str = EMOJI_JSON_URL
             subgroup.emojis = [e for e in subgroup.emojis if e.codepoints not in to_remove]
 
     return groups
+
+
+def download_svgs():
+    # But also this.
+    EMOJI_PATH.mkdir(parents=True, exist_ok=True)
+    FLAG_PATH.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.NamedTemporaryFile(suffix=".zip") as temp_zip:
+        with requests.get(NOTO_EMOJI_REPO_URL, stream=True) as response:
+            if response.status_code == 200 and response.headers.get("Content-Type", "") == "application/zip":
+                read_bytes = 0
+                for chunk in response.iter_content(0xffff):
+                    temp_zip.write(chunk)
+                    read_bytes += len(chunk)
+                    print(f"Downloaded {read_bytes} bytes")
+
+        with zipfile.ZipFile(temp_zip) as noto_zip:
+            zip_emoji_path = zipfile.Path(noto_zip, "noto-emoji-main/svg/")
+            zip_flag_path = zipfile.Path(noto_zip, "noto-emoji-main/third_party/region-flags/svg/")
+
+            for flag in zip_flag_path.iterdir():
+                if flag.is_file():
+                    with (FLAG_PATH / flag.name).open("wb") as f:
+                        f.write(flag.read_bytes())
+                        print(f"Wrote {flag.name}")
+
+            for emoji in zip_emoji_path.iterdir():
+                if emoji.is_file():
+                    with (EMOJI_PATH / emoji.name).open("wb") as f:
+                        f.write(emoji.read_bytes())
+                        print(f"Wrote {emoji.name}")

@@ -2,7 +2,7 @@ from typing import Literal, Self
 
 import platformdirs
 from PIL.Image import Resampling
-from pydantic import BaseModel, ConfigDict, Field, create_model
+from pydantic import AliasChoices, BaseModel, Field, create_model
 from pydantic_settings import (
     BaseSettings,
     CliToggleFlag,
@@ -30,7 +30,7 @@ DEFAULT_MIN_VISIBLE_ALPHA = 0x80
 DEFAULT_MIN_VISIBLE_BG_DISTANCE = 150
 DEFAULT_MIN_VISIBLE_BRIGHTNESS = 0x30
 DEFAULT_QUALITY = 5
-DEFAULT_VIEWPORT_COLUMNS = 120
+DEFAULT_VIEWPORT_COLUMNS = 100
 DEFAULT_VIEWPORT_ROWS = 50
 
 
@@ -38,7 +38,7 @@ def get_app_dirs():
     return platformdirs.PlatformDirs("image2ascii", ensure_exists=True)
 
 
-class Transparency(BaseModel, validate_assignment=True):
+class Transparency(BaseModel, validate_assignment=True, extra="ignore"):
     disable: CliToggleFlag[bool] = Field(default=False, description="Disable all transparency (boring but efficient)")
     methods: list[Literal["bgdistance", "brightness", "alpha"]] = Field(
         default=["bgdistance", "brightness", "alpha"],
@@ -79,8 +79,6 @@ class Transparency(BaseModel, validate_assignment=True):
         description="Pixels darker than this will be treated as transparent (scale: 0-255)",
     )
 
-    model_config = ConfigDict(extra="ignore")
-
     def use_bgdistance(self, has_background: bool):
         return not self.disable and "bgdistance" in self.methods and self.bg_distance > 0 and has_background
 
@@ -103,7 +101,12 @@ class Transparency(BaseModel, validate_assignment=True):
         )
 
 
-class Config(BaseSettings, validate_assignment=True):
+class Config(
+    BaseSettings,
+    validate_assignment=True,
+    extra="ignore",
+    yaml_file=get_app_dirs().user_config_path / "config.yaml",
+):
     background: NullableColorType = ANSI_COLOR_DICT["BLACK"]
     brightness: float = Field(default=1.0, ge=0, description="0 = completely black image")
     char_ratio: float = Field(
@@ -157,7 +160,10 @@ class Config(BaseSettings, validate_assignment=True):
         ),
     )
     sharpness: float = Field(default=1.0)
-    transparency: Transparency = Field(default_factory=Transparency, alias="trans")
+    transparency: Transparency = Field(
+        default_factory=Transparency,
+        validation_alias=AliasChoices("trans", "transparency"),
+    )
     viewport_columns: int = Field(
         default=DEFAULT_VIEWPORT_COLUMNS,
         gt=0,
@@ -168,8 +174,6 @@ class Config(BaseSettings, validate_assignment=True):
         gt=0,
         description="Maximum height (in characters) of the output",
     )
-
-    model_config = SettingsConfigDict(yaml_file=get_app_dirs().user_config_path / "config.yaml", extra="ignore")
 
     @property
     def viewport_size(self) -> Size:
@@ -190,14 +194,23 @@ class Config(BaseSettings, validate_assignment=True):
 
     @classmethod
     def extend(cls, other: type["Config"]):
+        return create_model(
+            cls.__name__,
+            __base__=(cls, other),
+            __module__=cls.__module__,
+            __config__=cls.extend_model_config(cls.model_config, other.model_config),
+        )
+
+    @staticmethod
+    def extend_model_config(source: SettingsConfigDict, target: SettingsConfigDict):
         default_config = BaseSettings.model_config
-        model_config = other.model_config.copy()
+        target = target.copy()
 
-        for key, value in cls.model_config.items():
+        for key, value in source.items():
             if key not in default_config or value != default_config[key]:  # type: ignore[ty:invalid-key]
-                model_config[key] = value  # type: ignore[ty:invalid-key]
+                target[key] = value  # type: ignore[ty:invalid-key]
 
-        return create_model(cls.__name__, __base__=(cls, other), __module__=cls.__module__, __config__=model_config)
+        return target
 
     @classmethod
     def settings_customise_sources(
@@ -208,4 +221,5 @@ class Config(BaseSettings, validate_assignment=True):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
+        settings_cls.model_config = cls.extend_model_config(Config.model_config, settings_cls.model_config)
         return init_settings, YamlConfigSettingsSource(settings_cls)

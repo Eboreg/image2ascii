@@ -16,6 +16,7 @@ from image2ascii.color import ANSI_COLORS, ANSI_RESET_FG
 from image2ascii.config import Config as BaseConfig
 from image2ascii.config_types import NullableColorType
 from image2ascii.enums import ColorInferenceMethod
+from image2ascii.plugin import BaseCliSubCommand
 from image2ascii.renderers import ConsoleRenderer, ImageRenderer
 from image2ascii.timing import print_results
 from image2ascii.workhorse import Workhorse
@@ -53,18 +54,6 @@ class CliConvertConfig(BaseConfig, validate_assignment=True):
         description="Only valid for console output. Adds a nice border.",
     )
     border_color: NullableColorType = None
-
-    model_config = SettingsConfigDict(
-        cli_shortcuts={
-            "viewport-columns": ["cols", "c"],
-            "viewport-rows": ["rows", "r"],
-            "background": "bg",
-        },
-    )
-
-
-class CliFileConvertConfig(CliConvertConfig, validate_assignment=True):
-    filename: CliPositionalArg[str]
     outfile: str | None = Field(
         description="Image file to write the results to",
         default=None,
@@ -75,7 +64,12 @@ class CliFileConvertConfig(CliConvertConfig, validate_assignment=True):
         description="Width or height (whichever one is largest) of the file produced by '--outfile'",
     )
 
-    def cli(self):
+
+class CliFileConvertConfig(CliConvertConfig, BaseCliSubCommand, extra="ignore", validate_assignment=True):
+    """Convert a file"""
+    filename: CliPositionalArg[str]
+
+    def run(self):
         if self.debug:
             from image2ascii import timing
 
@@ -84,11 +78,11 @@ class CliFileConvertConfig(CliConvertConfig, validate_assignment=True):
         if self.fastest:
             self.transparency.disable = True
             self.quality = 1
-            self.resample_method = Image.Resampling.NEAREST
-            self.color_inference_method = ColorInferenceMethod.MEDIAN
+            self.resample = Image.Resampling.NEAREST
+            self.color_inference = ColorInferenceMethod.MEDIAN
         elif self.best:
             self.quality = 10
-            self.color_inference_method = ColorInferenceMethod.MOST_COMMON
+            self.color_inference = ColorInferenceMethod.MOST_COMMON
             self.max_original_size = None
             self.min_likeness = 1.0
 
@@ -113,30 +107,9 @@ class CliFileConvertConfig(CliConvertConfig, validate_assignment=True):
             print_results()
 
 
-class Cli(
-    BaseSettings,
-    cli_parse_args=True,
-    cli_implicit_flags="dual",
-    cli_kebab_case=True,
-    cli_ignore_unknown_args=True,
-    cli_avoid_json=True,
-    cli_enforce_required=True,
-    cli_prog_name="i2a",
-    cli_parse_none_str="none",
-):
-    conv: CliSubCommand[CliFileConvertConfig] = Field(description="Convert a file")
-    colors: CliSubCommand[BaseSettings] = Field(description="A little colour guide")
-
-    def cli_cmd(self):
-        if not get_subcommand(self, is_required=False):
-            CliApp.print_help(self)
-
-        if self.colors:
-            self.print_color_guide()
-        elif self.conv:
-            self.conv.cli()
-
-    def print_color_guide(self):
+class ColorGuide(BaseCliSubCommand):
+    """A little colour guide"""
+    def run(self):
         print("When setting colours in the config file or via CLI, you can use the following formats:")
         print()
         print(" * CSS RGB colour strings ('#RRGGBB' or '#RGB', with or without the '#')")
@@ -153,3 +126,40 @@ class Cli(
 
         print()
         print("(Yes, I spell it 'colour' in text but 'color' in code. That's just something I do.)")
+        print()
+
+
+class Cli(
+    BaseSettings,
+    cli_avoid_json=True,
+    cli_enforce_required=True,
+    cli_hide_none_type=True,
+    cli_ignore_unknown_args=True,
+    cli_implicit_flags="dual",
+    cli_kebab_case="all",
+    cli_parse_args=True,
+    cli_parse_none_str="none",
+    cli_prog_name="i2a",
+    use_enum_values=True,
+):
+    conv: CliSubCommand[CliFileConvertConfig] = Field(description="Convert a file")
+    colors: CliSubCommand[ColorGuide] = Field(description="A little colour guide")
+
+    model_config = SettingsConfigDict(
+        cli_shortcuts={
+            "viewport-columns": ["cols", "c"],
+            "viewport-rows": ["rows", "r"],
+            "background": "bg",
+        },
+    )
+
+    def cli_cmd(self):
+        if cmd := self.get_subcommand():
+            cmd.run()
+        else:
+            CliApp.print_help(self)
+
+    def get_subcommand(self) -> BaseCliSubCommand | None:
+        if cmd := get_subcommand(self, is_required=False):
+            if isinstance(cmd, BaseCliSubCommand):
+                return cmd

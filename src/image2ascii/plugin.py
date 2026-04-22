@@ -1,34 +1,29 @@
-from typing import TYPE_CHECKING, Generic, TypeVar
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, ClassVar, Generic, TypeVar
 
-from image2ascii.types import ImageArray
+from pydantic_settings import BaseSettings
 
 
 if TYPE_CHECKING:
-    from PIL import Image
-
     from image2ascii.config import Config
+    from image2ascii.image import ImagePlus
 
 
 _Config = TypeVar("_Config", bound="Config")
 
+class BaseCliSubCommand(BaseSettings, ABC):
+    @abstractmethod
+    def run(self): ...
+
 
 class BasePlugin(Generic[_Config]):
-    config_class: type["Config"] | None = None
+    cli_subcommands: ClassVar[dict[str, type[BaseCliSubCommand]]] = {}
+    config_class: ClassVar[type["Config"] | None] = None
 
-    def __init__(self, config: _Config):
-        ...
+    def __init__(self, config: _Config): ...
 
-    def start(self, config: _Config):
-        ...
+    def start(self, config: _Config): ...
 
-    def pre_enhance(self, image: "Image.Image") -> "Image.Image | None":
-        return None
+    def pre_enhance(self, image: "ImagePlus"): ...
 
-    def post_enhance(self, image: "Image.Image") -> "Image.Image | None":
-        return None
-
-    def pre_create_matrix(self, image: "Image.Image", matrix: ImageArray) -> ImageArray | None:
-        return None
-
-    def post_create_matrix(self, image: "Image.Image", matrix: ImageArray) -> ImageArray | None:
-        return None
+    def post_enhance(self, image: "ImagePlus"): ...

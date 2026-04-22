@@ -13,6 +13,7 @@ from image2ascii.color_converters import (
     GrayScaleColorConverter,
     NullColorConverter,
 )
+from image2ascii.enums import ColorInferenceMethod
 from image2ascii.geometry import DefaultShapes, ShapeSet, SolidShapes
 
 
@@ -117,6 +118,8 @@ ColorConverterType = Annotated[
     BeforeValidator(validate_color_converter),
     PlainSerializer(serialize_color_converter, return_type=str),
 ]
+
+ColorInferenceMethodType = Annotated[ColorInferenceMethod, BeforeValidator(ColorInferenceMethod.validate)]
 
 NullableColorType = Annotated[
     Color | None,

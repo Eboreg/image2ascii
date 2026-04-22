@@ -8,6 +8,15 @@ class ColorInferenceMethod(enum.StrEnum):
     MEDIAN = enum.auto()
     MOST_COMMON = enum.auto()
 
+    @staticmethod
+    def validate(value: str) -> "ColorInferenceMethod | None":
+        value = value.upper().replace("-", "_")
+        if value in ColorInferenceMethod.__members__:
+            return ColorInferenceMethod[value]
+        if value in ColorInferenceMethod:
+            return ColorInferenceMethod(value)
+        return None
+
 
 class ObjectFit(enum.StrEnum):
     """
@@ -49,8 +58,3 @@ class RoundMethod(enum.StrEnum):
                 return math.ceil(value)
             case self.ROUND:
                 return round(value)
-
-
-class TransparencyMethod(enum.StrEnum):
-    BRIGHTNESS = enum.auto()
-    BG_DISTANCE = enum.auto()

@@ -32,7 +32,7 @@ class CliConvertConfig(BaseConfig, validate_assignment=True):
     best: CliToggleFlag[bool] = Field(
         default=False,
         description=(
-            "Shorthand for '--quality 10 --color-inference-method MOST_COMMON --max-original-size None "
+            "Shorthand for '--quality 10 --color-inference-method MOST-COMMON --max-original-size None "
             "--min-likeness 1'"
         ),
     )

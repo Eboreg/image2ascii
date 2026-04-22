@@ -46,7 +46,7 @@ Inferring colour for an RGBA array of shape=(29, 4):
 
 ```
 MEDIAN: 2.11 μs ± 29.1 ns per loop (mean ± std. dev. of 7 runs, 100,000 loops each)
-MOST_COMMON: 25.4 μs ± 910 ns per loop (mean ± std. dev. of 7 runs, 10,000 loops each)
+MOST-COMMON: 25.4 μs ± 910 ns per loop (mean ± std. dev. of 7 runs, 10,000 loops each)
 ```
 
 `ColorInferenceMethod.MEDIAN` is more than 10x faster.

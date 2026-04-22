@@ -15,6 +15,7 @@ from image2ascii.color import ANSI_COLOR_DICT
 from image2ascii.color_converters import FullRGBColorConverter
 from image2ascii.config_types import (
     ColorConverterType,
+    ColorInferenceMethodType,
     NullableColorType,
     ResampleType,
     ShapeSetType,
@@ -123,10 +124,10 @@ class Config(
             "FullRGBColorConverter ('rgb')"
         ),
     )
-    color_inference: ColorInferenceMethod = Field(
+    color_inference: ColorInferenceMethodType = Field(
         default=ColorInferenceMethod.MEDIAN,
         description=(
-            "MEDIAN = pick the median colour for each image section; MOST_COMMON = pick the most frequent one. MEDIAN "
+            "MEDIAN = pick the median colour for each image section; MOST-COMMON = pick the most frequent one. MEDIAN "
             "seems to be ~10x faster, for what it's worth"
         ),
     )

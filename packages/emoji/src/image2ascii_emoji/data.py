@@ -1,67 +1,29 @@
-import enum
 import re
 from abc import ABC
 from pathlib import Path
-from typing import Annotated, Any, Self, cast
+from typing import TYPE_CHECKING, Self, cast
 
 import requests
 from bs4 import BeautifulSoup, Tag
-from pydantic import AliasChoices, BaseModel, BeforeValidator, Field
-from pydantic_settings import CliPositionalArg, CliSuppress
+from pydantic import BaseModel, Field
 
 from image2ascii.utils import split_list
 from image2ascii_emoji.constants import EMOJI_LIST_URL, EMOJI_MODIFIER_URL, EMOJI_SVG_PATH, FLAG_SVG_PATH
+from image2ascii_emoji.enums import Gender, SkinTone
+
+
+if TYPE_CHECKING:
+    from image2ascii_emoji.cli import EmojiSearch
 
 
 SKIN_TONE_RE = re.compile(r".*?([^ ]+) skin tone(?:, ([^ ]+) skin tone)?.*")
 
 
-class Gender(enum.StrEnum):
-    FEMALE = "female"
-    MALE = "male"
-
-    @staticmethod
-    def validate_gender(value: str) -> "Gender | None":
-        value = value.upper()
-        if value in Gender.__members__:
-            return Gender[value]
-        if value in Gender:
-            return Gender(value)
-        return None
-
-
-class SkinTone(enum.StrEnum):
-    LIGHT = "light"
-    MEDIUM_LIGHT = "medium-light"
-    MEDIUM = "medium"
-    MEDIUM_DARK = "medium-dark"
-    DARK = "dark"
-
-    @classmethod
-    def get(cls, v: Any) -> Self | None:
-        if v in cls:
-            return cls(v)
-        return None
-
-    @staticmethod
-    def validate_skin_tone(value: str) -> "SkinTone | None":
-        value = value.upper().replace("-", "_")
-        if value in SkinTone.__members__:
-            return SkinTone[value]
-        if value in SkinTone:
-            return SkinTone(value)
-        return None
-
-
-GenderType = Annotated[Gender, BeforeValidator(Gender.validate_gender)]
-
-SkinToneType = Annotated[SkinTone, BeforeValidator(SkinTone.validate_skin_tone)]
-
-
+"""
 class EmojiSearch(BaseModel):
     term: CliPositionalArg[str]
-    all: bool = Field(default=False, description="List all matches instead of just using the best one")
-    facing_right: bool | None = None
+    all: bool = Field(default=False, description="List all matching emojis instead of just using the best match")
+    facing_right: bool | None = Field(default=None, description="Some emojis have special 'facing right' variations")
     gender: GenderType | None = None
     gender_2: GenderType | None = Field(
         default=None,
@@ -76,13 +38,14 @@ class EmojiSearch(BaseModel):
             "Skin tone of the 2nd person in the image, if any. Defaults to same as `skin-tone` if not specified."
         ),
     )
-    emoji_dir: Path = EMOJI_SVG_PATH
-    flag_dir: Path = FLAG_SVG_PATH
+    emoji_dir: Path = Field(default=EMOJI_SVG_PATH, description="Path to emoji SVG files")
+    flag_dir: Path = Field(default=FLAG_SVG_PATH, description="Path to flag SVG files")
     check_svg: CliSuppress[bool] = True
 
     @property
     def formatted_term(self):
         return Emoji.clean_name(self.term).replace("-", " ")
+"""
 
 
 class EmojiSearchMatch(BaseModel):
@@ -187,7 +150,7 @@ class Emoji(BaseModel, ABC):
             self.skin_tone_2 == other.skin_tone_2,
         ])
 
-    def match(self, search: EmojiSearch) -> None | EmojiSearchMatch:
+    def match(self, search: "EmojiSearch") -> None | EmojiSearchMatch:
         if (
             not any(search.formatted_term in name for name in self.formatted_names) and
             not any(search.formatted_term in keyword for keyword in self.formatted_keywords)
@@ -442,7 +405,7 @@ class EmojiCollection(BaseModel):
                 if base_emoji := subgroup.find_base_emoji(name, codes):
                     base_emoji.variation_from_scraped_tr(tr, subgroup_name=subgroup.name)
 
-    def search(self, search: EmojiSearch) -> list[Emoji]:
+    def search(self, search: "EmojiSearch") -> list[Emoji]:
         matches = [emoji.match(search) for emoji in self.all_emojis]
         matches = [m for m in matches if m is not None]
         matches = sorted(matches, key=lambda m: m.points, reverse=True)

@@ -1,47 +1,37 @@
 from importlib.metadata import entry_points
-from typing import TYPE_CHECKING, ClassVar, TypeVar
+from typing import TYPE_CHECKING, ClassVar
 
 from image2ascii.timing import timer
 
 
 if TYPE_CHECKING:
-    from image2ascii.config import Config
     from image2ascii.image import ImagePlus
     from image2ascii.plugin import BaseCliSubCommand, BasePlugin
 
 
-_Config = TypeVar("_Config", bound="Config")
-
-
 class Registry:
-    __plugin_classes: ClassVar[list[type["BasePlugin"]] | None] = None
+    __plugin_classes: list[type["BasePlugin"]] | None = None
+    __singleton: ClassVar["Registry | None"] = None
 
     plugins: list["BasePlugin"]
 
-    @classmethod
     @timer
-    def extend_config_class(cls, base: type[_Config]):
-        result = base
+    def __init__(self):
+        self.plugins = []
+        for plugin_class in self.get_plugin_classes():
+            self.plugins.append(plugin_class())
 
-        for plugin_class in cls.get_plugin_classes():
-            if plugin_class.config_class is not None and plugin_class.config_class is not base:
-                result = base.extend(plugin_class.config_class)
-
-        return result
-
-    @classmethod
-    def get_cli_subcommands(cls):
+    def get_cli_subcommands(self):
         subcommands: dict[str, type["BaseCliSubCommand"]] = {}
 
-        for plugin_class in cls.get_plugin_classes():
-            subcommands.update(plugin_class.cli_subcommands)
+        for plugin in self.plugins:
+            subcommands.update(plugin.cli_subcommands)
 
         return subcommands
 
-    @classmethod
     @timer
-    def get_plugin_classes(cls) -> list[type["BasePlugin"]]:
-        if cls.__plugin_classes is None:
+    def get_plugin_classes(self) -> list[type["BasePlugin"]]:
+        if self.__plugin_classes is None:
             from image2ascii.plugin import BasePlugin
 
             plugin_classes: list[type[BasePlugin]] = []
@@ -56,22 +46,22 @@ class Registry:
                         if isinstance(member, type) and issubclass(member, BasePlugin):
                             plugin_classes.append(member)
 
-            cls.__plugin_classes = plugin_classes
+            self.__plugin_classes = plugin_classes
 
-        return cls.__plugin_classes
+        return self.__plugin_classes
 
     @timer
-    def __init__(self, config: "Config"):
-        self.plugins = []
-        for plugin_class in self.__class__.get_plugin_classes():
-            self.plugins.append(plugin_class(config))
+    def post_enhance(self, image: "ImagePlus"):
+        for plugin in self.plugins:
+            plugin.post_enhance(image)
 
     @timer
     def pre_enhance(self, image: "ImagePlus"):
         for plugin in self.plugins:
             plugin.pre_enhance(image)
 
-    @timer
-    def post_enhance(self, image: "ImagePlus"):
-        for plugin in self.plugins:
-            plugin.post_enhance(image)
+    @classmethod
+    def singleton(cls) -> "Registry":
+        if cls.__singleton is None:
+            cls.__singleton = cls()
+        return cls.__singleton

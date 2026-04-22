@@ -1,30 +1,34 @@
 # If you like this file, rename it to `config.yaml` and place it in
 # `~/.config/image2ascii/` (if you're running Linux, that is ... if not,
 # you're on your own).
-background: BLACK
-brightness: 1
+border: true
 char_ratio: 0.469
-color_balance: 1
-color_converter: rgb
-color_inference: median
-contrast: 1
+color:
+  background: black
+  border: brightblack
+  converter: rgb
+  inference: median
 crop: true
-invert: false
-max_original_size: 2000
+effect:
+  brightness: 1.0
+  contrast: 1
+  invert: false
+  sharpness: 1.0
+margins: 1
 min_likeness: 0.9
 quality: 5
 resample: NEAREST
 shapeset: default
-sharpness: 1
 transparency:
+  alpha: 128
+  bg_distance: 150
+  brightness: 48
   disable: false
+  force_brightness: false
   methods:
   - brightness
   - bgdistance
   - alpha
-  alpha: 128
-  bg_distance: 150
-  brightness: 48
-  force_brightness: false
-viewport_columns: 120
-viewport_rows: 50
+viewport:
+  columns: 120
+  rows: 50

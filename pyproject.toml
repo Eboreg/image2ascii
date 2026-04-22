@@ -1,6 +1,6 @@
 [project]
 name = "image2ascii"
-version = "0.9.3"
+version = "0.10.0"
 description = "Turns images into ASCII art. This is just the core library; make sure to install some extras, too."
 readme = "README.md"
 authors = [

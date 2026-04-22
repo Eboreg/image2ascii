@@ -1,7 +1,6 @@
 from image2ascii.plugin import BasePlugin
-from image2ascii_cli.config import CliFileConvertConfig, ColorGuide
+from image2ascii_cli.config import CliFileConvertSettings, ColorGuide
 
 
 class Plugin(BasePlugin):
-    config_class = CliFileConvertConfig
-    cli_subcommands = {"conv": CliFileConvertConfig, "colors": ColorGuide}
+    cli_subcommands = {"conv": CliFileConvertSettings, "colors": ColorGuide}

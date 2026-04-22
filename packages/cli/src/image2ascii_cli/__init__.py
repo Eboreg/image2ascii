@@ -3,12 +3,12 @@ import sys
 from importlib.metadata import version
 
 from image2ascii_cli.cli import cli
-from image2ascii_cli.config import CliFileConvertConfig
+from image2ascii_cli.config import CliFileConvertSettings
 from image2ascii_cli.plugin import Plugin
 
 
 __version__ = version("image2ascii-cli")
-__all__ = ["cli", "CliFileConvertConfig", "Plugin"]
+__all__ = ["cli", "CliFileConvertSettings", "Plugin"]
 
 # Logging everything above INFO level to stderr, the rest to stdout:
 __stderr_handler = logging.StreamHandler(sys.stderr)

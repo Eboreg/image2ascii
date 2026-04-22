@@ -6,7 +6,6 @@ from typing import IO, TYPE_CHECKING, Self, cast
 import cairosvg
 import numpy as np
 from PIL import Image, ImageEnhance, ImageOps
-from PIL.Image import Resampling
 
 from image2ascii.color import ANSI_COLOR_DICT, A, B, Color, G, R, Vi, get_perceived_brightness
 from image2ascii.geometry import Size, SubRect
@@ -15,6 +14,8 @@ from image2ascii.types import ImageArray
 
 
 if TYPE_CHECKING:
+    from PIL.Image import Resampling
+
     from image2ascii.geometry import SizeF
 
 
@@ -159,7 +160,7 @@ class ImagePlus:
         return matrix
 
     @timer
-    def resize(self, size: Size | tuple[int, int] | list[int], resample: Resampling | None = None):
+    def resize(self, size: Size | tuple[int, int] | list[int], resample: "Resampling | None" = None):
         if isinstance(size, Size):
             size = size.tuple
         if size != (self.__image.width, self.__image.height):

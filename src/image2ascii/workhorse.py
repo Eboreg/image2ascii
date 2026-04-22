@@ -37,15 +37,19 @@ class Workhorse:
     visible_cropbox: "SubRect | None" = None
 
     @property
+    def final_size_chars(self) -> "Size":
+        return self.final_size_chars_f.to_size(round_for_ratio=True)
+
+    @property
     def final_size_chars_f(self) -> SizeF:
         """Final number of columns & rows of the ASCII output"""
-        return self.config.viewport_size.to_size_f().fit_ratio(
+        return self.config.viewport.size.to_size_f().fit_ratio(
             self.image.ratio / self.config.char_ratio / self.image.pixel_ratio
         )
 
     @property
-    def final_size_chars(self) -> "Size":
-        return self.final_size_chars_f.to_size(round_for_ratio=True)
+    def final_size_px(self) -> "Size":
+        return self.final_size_px_f.to_size(round_for_ratio=True)
 
     @property
     def final_size_px_f(self) -> SizeF:
@@ -56,10 +60,6 @@ class Workhorse:
         """
         return self.final_size_chars_f * self.config.quality / SizeF(1, self.config.char_ratio)
 
-    @property
-    def final_size_px(self) -> "Size":
-        return self.final_size_px_f.to_size(round_for_ratio=True)
-
     @timer
     def __init__(
         self,
@@ -69,11 +69,11 @@ class Workhorse:
         shapeset: "type[ShapeSet] | None" = None,
     ):
         self.config = config.model_copy()
-        self.color_converter = color_converter or config.color_converter()
+        self.color_converter = color_converter or config.color.converter()
         self.shapeset = shapeset or config.shapeset
         self.original_image = image
         self.image = image.copy()
-        self.plugins = Registry(config)
+        self.plugins = Registry.singleton()
 
     @timer
     def generate(self) -> Iterator[Character]:
@@ -122,7 +122,7 @@ class Workhorse:
             self.is_whole_image_opaque = True
             self.image.resize(self.final_size_chars)  # 5.1
             self.image.pixel_ratio = 1 / self.config.char_ratio  # 5.2
-            self.image.fill_transparency(self.config.background)  # 5.3
+            self.image.fill_transparency(self.config.color.background)  # 5.3
         else:
             self.is_whole_image_opaque = False
             self.image.resize(self.final_size_px)  # 6.1
@@ -138,7 +138,11 @@ class Workhorse:
         renderer.start(
             original_ratio=self.final_size_px_f.ratio,
             size_chars=self.final_size_chars,
-            background=self.color_converter.closest(self.config.background) if self.config.background else None,
+            background=(
+                self.color_converter.closest(self.config.color.background)
+                if self.config.color.background
+                else None
+            ),
         )
         for character in self.generate():
             renderer.render_character(character)
@@ -204,7 +208,7 @@ class Workhorse:
             self.image.resize(self.final_size_chars)  # 6.1
             self.image.pixel_ratio = 1 / self.config.char_ratio  # 6.2
             self.__enhance(self.image)  # 6.3
-            self.image.fill_transparency(self.config.background)  # 6.4
+            self.image.fill_transparency(self.config.color.background)  # 6.4
         else:
             self.image.resize(self.final_size_px)  # 7.1
             self.__enhance(self.image)  # 7.2
@@ -214,11 +218,11 @@ class Workhorse:
     def __enhance(self, image: ImagePlus):
         self.plugins.pre_enhance(image)
         image.enhance(
-            brightness=self.config.brightness,
-            color_balance=self.config.color_balance,
-            contrast=self.config.contrast,
-            sharpness=self.config.sharpness,
-            invert=self.config.invert,
+            brightness=self.config.effect.brightness,
+            color_balance=self.config.effect.color_balance,
+            contrast=self.config.effect.contrast,
+            sharpness=self.config.effect.sharpness,
+            invert=self.config.effect.invert,
         )
         self.plugins.post_enhance(image)
 
@@ -257,8 +261,8 @@ class Workhorse:
             column=rect.column,
             row=rect.row,
             color=(
-                self.color_converter.get_section_color(section, self.config.color_inference) or
-                self.config.default_color
+                self.color_converter.get_section_color(section, self.config.color.inference) or
+                self.config.color.default
             ),
         )
 
@@ -266,11 +270,11 @@ class Workhorse:
     def __update_visibility(self, image: ImagePlus):
         # First check if we should determine visibility by background colour
         # (dis-)similarity:
-        if self.config.background and self.config.transparency.use_bgdistance(bool(self.config.background)):
-            image.update_visibility_by_bgdistance(self.config.background, self.config.transparency.bg_distance)
+        if self.config.color.background and self.config.transparency.use_bgdistance(bool(self.config.color.background)):
+            image.update_visibility_by_bgdistance(self.config.color.background, self.config.transparency.bg_distance)
 
         # Maybe we should let "perceived brightness" do its thing:
-        if self.config.transparency.use_brightness(bool(self.config.background)):
+        if self.config.transparency.use_brightness(bool(self.config.color.background)):
             image.update_visibility_by_brightness(self.config.transparency.brightness)
 
         # Check if there are literally transparent pixels:

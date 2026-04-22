@@ -1,8 +1,8 @@
-from typing import Literal, Self
+from typing import Literal
 
 import platformdirs
 from PIL.Image import Resampling
-from pydantic import AliasChoices, BaseModel, Field, create_model
+from pydantic import AliasChoices, BaseModel, Field
 from pydantic_settings import (
     BaseSettings,
     CliToggleFlag,
@@ -25,7 +25,6 @@ from image2ascii.geometry import DefaultShapes, Size, SizeF
 
 
 DEFAULT_CHAR_RATIO = 0.469
-DEFAULT_MAX_ORIGINAL_SIZE = 2000
 DEFAULT_MIN_LIKENESS = 0.9
 DEFAULT_MIN_VISIBLE_ALPHA = 0x80
 DEFAULT_MIN_VISIBLE_BG_DISTANCE = 150
@@ -39,7 +38,7 @@ def get_app_dirs():
     return platformdirs.PlatformDirs("image2ascii", ensure_exists=True)
 
 
-class Transparency(BaseModel, validate_assignment=True, extra="ignore"):
+class TransparencySettings(BaseModel, validate_assignment=True, extra="ignore"):
     disable: CliToggleFlag[bool] = Field(default=False, description="Disable all transparency (boring but efficient)")
     methods: list[Literal["bgdistance", "brightness", "alpha"]] = Field(
         default=["bgdistance", "brightness", "alpha"],
@@ -102,21 +101,34 @@ class Transparency(BaseModel, validate_assignment=True, extra="ignore"):
         )
 
 
-class Config(
-    BaseSettings,
-    validate_assignment=True,
-    extra="ignore",
-    yaml_file=get_app_dirs().user_config_path / "config.yaml",
-):
-    background: NullableColorType = ANSI_COLOR_DICT["BLACK"]
-    brightness: float = Field(default=1.0, ge=0, description="0 = completely black image")
-    char_ratio: float = Field(
-        default=DEFAULT_CHAR_RATIO,
+class ViewportSettings(BaseSettings, validate_assignment=True, extra="ignore"):
+    columns: int = Field(
+        default=DEFAULT_VIEWPORT_COLUMNS,
         gt=0,
-        description="Width/height ratio of one output character; tweak this if results look squashed or streched out",
+        description="Maximum width (in characters) of the output",
     )
+    rows: int = Field(
+        default=DEFAULT_VIEWPORT_ROWS,
+        gt=0,
+        description="Maximum height (in characters) of the output",
+    )
+
+    @property
+    def size(self) -> Size:
+        return Size(self.columns, self.rows)
+
+
+class EffectSettings(BaseSettings, validate_assignment=True, extra="ignore"):
+    brightness: float = Field(default=1.0, ge=0, description="0 = completely black image")
     color_balance: float = Field(default=1.0)
-    color_converter: ColorConverterType = Field(
+    contrast: float = Field(default=1.0)
+    invert: bool = Field(default=False, description="Invert all character colours")
+    sharpness: float = Field(default=1.0)
+
+
+class ColorSettings(BaseSettings, validate_assignment=True, extra="ignore"):
+    background: NullableColorType = ANSI_COLOR_DICT["BLACK"]
+    converter: ColorConverterType = Field(
         default=FullRGBColorConverter,
         description=(
             "Class responsible for interpreting colours. Built-in choices (with shorthands for convenience): "
@@ -124,22 +136,34 @@ class Config(
             "FullRGBColorConverter ('rgb')"
         ),
     )
-    color_inference: ColorInferenceMethodType = Field(
+    inference: ColorInferenceMethodType = Field(
         default=ColorInferenceMethod.MEDIAN,
         description=(
             "MEDIAN = pick the median colour for each image section; MOST-COMMON = pick the most frequent one. MEDIAN "
             "seems to be ~10x faster, for what it's worth"
         ),
     )
-    contrast: float = Field(default=1.0)
-    crop: bool = Field(default=False, description="Remove any empty spaces around the result")
-    debug: bool = False
-    default_color: NullableColorType = Field(
+    default: NullableColorType = Field(
         default=None,
         description="Fill colour to use when there is no other available."
     )
-    invert: bool = Field(default=False, description="Invert all character colours")
-    max_original_size: int | None = Field(default=DEFAULT_MAX_ORIGINAL_SIZE, gt=0)
+
+
+class Config(
+    BaseSettings,
+    validate_assignment=True,
+    extra="ignore",
+    yaml_file=get_app_dirs().user_config_path / "config.yaml",
+):
+    char_ratio: float = Field(
+        default=DEFAULT_CHAR_RATIO,
+        gt=0,
+        description="Width/height ratio of one output character; tweak this if results look squashed or streched out",
+    )
+    color: ColorSettings = Field(default_factory=ColorSettings)
+    crop: bool = Field(default=False, description="Remove any empty spaces around the result")
+    debug: bool = False
+    effect: EffectSettings = Field(default_factory=EffectSettings)
     min_likeness: float = Field(
         default=DEFAULT_MIN_LIKENESS,
         description=(
@@ -160,47 +184,18 @@ class Config(
             "('default'), SolidShapes ('solid')"
         ),
     )
-    sharpness: float = Field(default=1.0)
-    transparency: Transparency = Field(
-        default_factory=Transparency,
+    transparency: TransparencySettings = Field(
+        default_factory=TransparencySettings,
         validation_alias=AliasChoices("trans", "transparency"),
     )
-    viewport_columns: int = Field(
-        default=DEFAULT_VIEWPORT_COLUMNS,
-        gt=0,
-        description="Maximum width (in characters) of the output",
-    )
-    viewport_rows: int = Field(
-        default=DEFAULT_VIEWPORT_ROWS,
-        gt=0,
-        description="Maximum height (in characters) of the output",
-    )
-
-    @property
-    def viewport_size(self) -> Size:
-        return Size(self.viewport_columns, self.viewport_rows)
+    viewport: ViewportSettings = Field(default_factory=ViewportSettings)
 
     @property
     def viewport_size_px(self) -> SizeF:
         """
         With 120x40 char viewport, char_ratio=0.4, quality=5: SizeF(600, 500)
         """
-        return self.viewport_size * self.quality / SizeF(1, self.char_ratio)
-
-    def merge(self, other: Self) -> Self:
-        config_dict = self.model_dump()
-        config_dict.update(other.model_dump(exclude_unset=True))
-
-        return self.model_validate(config_dict)
-
-    @classmethod
-    def extend(cls, other: type["Config"]):
-        return create_model(
-            cls.__name__,
-            __base__=(cls, other),
-            __module__=cls.__module__,
-            __config__=cls.extend_model_config(cls.model_config, other.model_config),
-        )
+        return self.viewport.size * self.quality / SizeF(1, self.char_ratio)
 
     @staticmethod
     def extend_model_config(source: SettingsConfigDict, target: SettingsConfigDict):

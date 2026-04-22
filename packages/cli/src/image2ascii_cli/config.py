@@ -13,7 +13,7 @@ from pydantic_settings import (
 )
 
 from image2ascii.color import ANSI_COLORS, ANSI_RESET_FG
-from image2ascii.config import Config as BaseConfig
+from image2ascii.config import ColorSettings as BaseColorSettings, Config as BaseConfig
 from image2ascii.config_types import NullableColorType
 from image2ascii.enums import ColorInferenceMethod
 from image2ascii.plugin import BaseCliSubCommand
@@ -25,22 +25,26 @@ from image2ascii.workhorse import Workhorse
 logger = logging.getLogger(__name__)
 
 
-class CliConvertConfig(BaseConfig, validate_assignment=True):
-    zoom: float = Field(default=1, gt=0)
+class ZoomSettings(BaseSettings, extra="ignore", validate_assignment=True):
+    factor: float = Field(default=1, gt=0)
     x: float = Field(default=0.5, ge=0, le=1, description="Relative X position to zoom in on")
     y: float = Field(default=0.5, ge=0, le=1, description="Relative Y position to zoom in on")
+
+
+class ColorSettings(BaseColorSettings):
+    border: NullableColorType = None
+
+
+class CliConvertSettings(BaseConfig, validate_assignment=True):
+    zoom: ZoomSettings = Field(default_factory=ZoomSettings)
+    color: ColorSettings = Field(default_factory=ColorSettings) # pyright: ignore[reportIncompatibleVariableOverride]
     best: CliToggleFlag[bool] = Field(
         default=False,
-        description=(
-            "Shorthand for '--quality 10 --color-inference-method MOST-COMMON --max-original-size None "
-            "--min-likeness 1'"
-        ),
+        description="Shorthand for '--quality 10 --color.inference MOST-COMMON --min-likeness 1'",
     )
     fastest: CliToggleFlag[bool] = Field(
         default=False,
-        description=(
-            "Shorthand for '--quality 1 --trans.disable --resample-method NEAREST --color-inference-method MEDIAN'"
-        ),
+        description="Shorthand for '--quality 1 --trans.disable --resample NEAREST --color.inference MEDIAN'",
     )
     margins: int = Field(
         default=0,
@@ -65,7 +69,7 @@ class CliConvertConfig(BaseConfig, validate_assignment=True):
     )
 
 
-class CliFileConvertConfig(CliConvertConfig, BaseCliSubCommand, extra="ignore", validate_assignment=True):
+class CliFileConvertSettings(CliConvertSettings, BaseCliSubCommand, extra="ignore", validate_assignment=True):
     """Convert a file"""
     filename: CliPositionalArg[str]
 
@@ -79,11 +83,10 @@ class CliFileConvertConfig(CliConvertConfig, BaseCliSubCommand, extra="ignore", 
             self.transparency.disable = True
             self.quality = 1
             self.resample = Image.Resampling.NEAREST
-            self.color_inference = ColorInferenceMethod.MEDIAN
+            self.color.inference = ColorInferenceMethod.MEDIAN
         elif self.best:
             self.quality = 10
-            self.color_inference = ColorInferenceMethod.MOST_COMMON
-            self.max_original_size = None
+            self.color.inference = ColorInferenceMethod.MOST_COMMON
             self.min_likeness = 1.0
 
         if self.filename.lower().endswith(".svg"):
@@ -99,7 +102,7 @@ class CliFileConvertConfig(CliConvertConfig, BaseCliSubCommand, extra="ignore", 
             renderer = ConsoleRenderer(
                 margins=self.margins,
                 border=self.border,
-                border_color=self.border_color or self.default_color,
+                border_color=self.color.border or self.color.default,
             )
             horse.prepare_and_render(renderer)
 
@@ -142,14 +145,20 @@ class Cli(
     cli_prog_name="i2a",
     use_enum_values=True,
 ):
-    conv: CliSubCommand[CliFileConvertConfig] = Field(description="Convert a file")
+    conv: CliSubCommand[CliFileConvertSettings] = Field(description="Convert a file")
     colors: CliSubCommand[ColorGuide] = Field(description="A little colour guide")
 
     model_config = SettingsConfigDict(
         cli_shortcuts={
-            "viewport-columns": ["cols", "c"],
-            "viewport-rows": ["rows", "r"],
+            "viewport.columns": ["cols", "c"],
+            "viewport.rows": ["rows", "r"],
             "background": "bg",
+            "zoom.factor": "z",
+            "effect.brightness": "brightness",
+            "effect.color-balance": "color-balance",
+            "effect.contrast": "contrast",
+            "effect.invert": "invert",
+            "effect.sharpness": "sharpness",
         },
     )
 

@@ -4,7 +4,7 @@
 
 This is a thing that makes fancy ANSI graphics out of image files. And not just by sloppily repeating the same character all over the place; no, it detects transparency and draws edges with `.od$$o.o$$bo.` etc, like a real little ANSI artist.
 
-It's an almost complete rewrite of an old project of mine. It's pretty versatile. You can adjust sizes, colour balance, contrast, define your own colour converters, shape sets, etc.
+It's an almost complete rewrite of an old project of mine. It's pretty versatile. You can adjust sizes, colour balance, contrast, define your own colour converters, shape sets, etc. There is [a CLI](packages/cli) for converting arbitrary images and making all kinds of adjustments, and [another one](packages/emoji) for emojis and flags. And more to come (?).
 
 More info will probably come soon.
 

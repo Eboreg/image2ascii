@@ -5,21 +5,10 @@ from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, CliPositionalArg, CliSuppress
 
 from image2ascii.plugin import BaseCliSubCommand
-from image2ascii_emoji.constants import (
-    EMOJI_LIST_URL,
-    EMOJI_MODIFIER_URL,
-    EMOJI_SVG_PATH,
-    FLAG_SVG_PATH,
-    USER_DATA_PATH,
-)
+from image2ascii_emoji.constants import EMOJI_SVG_PATH, FLAG_SVG_PATH
 from image2ascii_emoji.data import Emoji
 from image2ascii_emoji.enums import GenderType, SkinToneType
-from image2ascii_emoji.functions import (
-    download_svgs,
-    get_emoji_collection,
-    is_svg_download_needed,
-    reload_emoji_collection,
-)
+from image2ascii_emoji.functions import get_emoji_collection_interactive
 
 
 class EmojiSearch(BaseSettings):
@@ -52,26 +41,7 @@ class EmojiSearch(BaseSettings):
 class EmojiSubCommand(EmojiSearch, CliConvertSettings, BaseCliSubCommand, extra="ignore"):
     """All your favourites."""
     def run(self):
-        if is_svg_download_needed():
-            print(
-                "Before you can use image2ascii-emoji, we need to do an automatic one-time download \n"
-                "of image files from the Noto-Emoji font. The download is ~212 MB, and after extraction \n"
-                f"~63 MB of SVG files will be placed under {USER_DATA_PATH}.\n"
-            )
-            reply = input("Do this download now? [Y/n] ").strip()
-            if not reply or reply in "Yy":
-                download_svgs(lambda status, br: print(status, end="\n" if br else "", flush=True))
-
-        collection = get_emoji_collection()
-
-        if collection is None:
-            print(
-                f"Got to do a one-time scraping of {EMOJI_LIST_URL}\n"
-                f"and {EMOJI_MODIFIER_URL}.\n"
-                "Just a moment ..."
-            )
-            collection = reload_emoji_collection()
-
+        collection = get_emoji_collection_interactive()
         emojis = collection.search(self)
 
         if len(emojis) == 1:
@@ -95,3 +65,39 @@ class EmojiSubCommand(EmojiSearch, CliConvertSettings, BaseCliSubCommand, extra=
 
         else:
             print("No emojis found.")
+
+
+class EmojiListSubCommand(BaseCliSubCommand):
+    """List all available emojis (long list!)"""
+    variations: bool = Field(default=False, description="Include all skintone & gender variations")
+    keywords: bool = Field(default=False, description="Also include each emoji's list of keywords")
+
+    def run(self):
+        collection = get_emoji_collection_interactive()
+
+        for group_idx, group in enumerate(collection.groups):
+            if group_idx > 0:
+                print()
+
+            print(f"==[ {group.name.upper()} ]" + ("=" * (82 - len(group.name))))
+
+            for subgroup in group.subgroups:
+                print(f"--[ {subgroup.name} ]" + ("-" * (82 - len(subgroup.name))))
+                all_emojis = subgroup.all_emojis if self.variations else subgroup.emojis
+                max_name_length = max(max(len(e.name) for e in all_emojis), 40) + 2
+                max_cli_args_length = max(max(len(e.cli_args) for e in all_emojis), 40) + 2
+
+                for emoji in subgroup.emojis:
+                    emoji_row = f"{emoji.name:{max_name_length}s} {emoji.cli_args:{max_cli_args_length}s}"
+                    if subgroup.name != "country-flag":
+                        emoji_row += f" {emoji.unicode}"
+                    print(emoji_row)
+                    if self.keywords and emoji.keywords:
+                        print("    " + ", ".join(emoji.keywords))
+
+                    if self.variations:
+                        for variation in emoji.variations:
+                            print(
+                                f"  {variation.name:{max_name_length - 2}s} "
+                                f"{variation.cli_args:{max_cli_args_length - 2}s} {variation.unicode}"
+                            )

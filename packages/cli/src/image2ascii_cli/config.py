@@ -152,7 +152,7 @@ class Cli(
         cli_shortcuts={
             "viewport.columns": ["cols", "c"],
             "viewport.rows": ["rows", "r"],
-            "background": "bg",
+            "color.background": ["background", "bg"],
             "zoom.factor": "z",
             "effect.brightness": "brightness",
             "effect.color-balance": "color-balance",

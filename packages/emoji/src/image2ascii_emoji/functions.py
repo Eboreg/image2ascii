@@ -91,6 +91,30 @@ def get_emoji_collection() -> EmojiCollection | None:
     return None
 
 
+def get_emoji_collection_interactive() -> EmojiCollection:
+    if is_svg_download_needed():
+        print(
+            "Before you can use image2ascii-emoji, we need to do an automatic one-time download \n"
+            "of image files from the Noto-Emoji font. The download is ~212 MB, and after extraction \n"
+            f"~63 MB of SVG files will be placed under {USER_DATA_PATH}.\n"
+        )
+        reply = input("Do this download now? [Y/n] ").strip()
+        if not reply or reply in "Yy":
+            download_svgs(lambda status, br: print(status, end="\n" if br else "", flush=True))
+
+    collection = get_emoji_collection()
+
+    if collection is None:
+        print(
+            f"Got to do a one-time scraping of {EMOJI_LIST_URL}\n"
+            f"and {EMOJI_MODIFIER_URL}.\n"
+            "Just a moment ..."
+        )
+        collection = reload_emoji_collection()
+
+    return collection
+
+
 def is_svg_download_needed():
     ensure_svg_dirs_exist()
     return len(list(EMOJI_SVG_PATH.glob("*.svg"))) < 3000 or len(list(FLAG_SVG_PATH.glob("*.svg"))) < 300

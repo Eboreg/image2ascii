@@ -138,6 +138,11 @@ class Emoji(BaseModel, ABC):
             pass
         return None
 
+    @property
+    def unicode(self):
+        codes = [int(code, base=16) for code in self.codes]
+        return "".join(chr(code) for code in codes)
+
     def get_base_name(self) -> str:
         return self.name
 
@@ -195,8 +200,8 @@ class Emoji(BaseModel, ABC):
 
     @staticmethod
     def clean_name(name: str):
-        name  = re.sub(r"[:,“”’⊛]+", "", name.lower()).strip("-").strip(" ")
-        return name
+        name  = re.sub(r"[:,“”’⊛().&]+", "", name.lower()).replace(" - ", "-").strip("-").strip(" ")
+        return re.sub(r" {2,}", " ", name)
 
     @staticmethod
     def remove_genders_from_name(name: str):

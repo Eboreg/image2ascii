@@ -27,11 +27,13 @@ build-backend = "uv_build"
 members = [
     "packages/cli",
     "packages/emoji",
+    "packages/textual",
 ]
 
 [tool.uv.sources]
 image2ascii-emoji = { workspace = true }
 image2ascii-cli = { workspace = true }
+image2ascii-textual = { workspace = true }
 
 [dependency-groups]
 cli = [
@@ -40,6 +42,7 @@ cli = [
 dev = [
     "image2ascii-cli",
     "image2ascii-emoji",
+    "image2ascii-textual",
     "ipdb>=0.13.13",
     "ipython>=9.12.0",
     "ruff>=0.15.10",
@@ -47,6 +50,9 @@ dev = [
 ]
 emoji = [
     "image2ascii-emoji",
+]
+textual = [
+    "image2ascii-textual",
 ]
 
 [tool.ruff]

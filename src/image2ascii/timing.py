@@ -36,7 +36,10 @@ def timer(func):
 
         ret = func(*args, **kwargs)
 
-        running_timings.remove(timing)
+        try:
+            running_timings.remove(timing)
+        except ValueError:
+            pass
         timing["elapsed_time"] = time.monotonic() - start_time
 
         return ret
@@ -180,7 +183,8 @@ def summarize_timing_by_hierarchy() -> TimingResult:
                     r.children.append(result[key])
                     break
 
-    root = TimingResult("Total", sum(t["elapsed_time"] for t in timings), None, is_root=True)
-    root.children.extend([r for r in result.values() if r.parent is None])
+    root_children = [r for r in result.values() if r.parent is None]
+    root = TimingResult("Total", sum(r.total_time for r in root_children), None, is_root=True)
+    root.children.extend(root_children)
 
     return root

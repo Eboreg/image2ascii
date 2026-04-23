@@ -1,4 +1,6 @@
-from collections.abc import Iterator
+import concurrent.futures
+import itertools
+from collections.abc import Iterable, Iterator
 from os import PathLike
 from pathlib import Path
 from typing import IO, TYPE_CHECKING, Self
@@ -14,6 +16,7 @@ from image2ascii.types import ImageArray
 
 
 if TYPE_CHECKING:
+    from image2ascii.color import Color
     from image2ascii.color_converters import AbstractColorConverter
     from image2ascii.config import Config
     from image2ascii.geometry import IndexedSizePartition, PointF, ShapeSet, Size, SubRect
@@ -22,6 +25,16 @@ if TYPE_CHECKING:
 
 class Workhorse:
     """
+    This class is prepared for use as a context manager (i.e. with `with`),
+    although neither `__enter__` nor `__exit__` does anything at the moment.
+
+    I tried running `__get_section_character_string` and `__get_section_color`
+    in parallel by sending them to a common ThreadPoolExecutor (whose `shutdown`
+    method was run in `__exit__`), but this turned out to add so much overhead,
+    it made the whole thing _slower_ instead:
+        * `__get_character`, 4500 runs, without threads: 0.043187 s
+        * `__get_character`, 4500 runs, with threads: 0.17162 s
+
     is_whole_image_opaque
     ---------------------
     This is used for a micro-optimization: If the whole image was found to be
@@ -75,6 +88,12 @@ class Workhorse:
         self.image = image.copy()
         self.plugins = Registry.singleton()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        pass
+
     @timer
     def generate(self) -> Iterator[Character]:
         matrix = self.image.get_matrix(regenerate_if_stale=True)
@@ -86,6 +105,34 @@ class Workhorse:
 
         for rect in self.image.size.partition(columns, rows):
             yield self.__get_character(matrix, rect)
+
+    @timer
+    def generate_async(self) -> Iterator[Character]:
+        """
+        Not necessarily more effective than `generate`, so not used ATM.
+        Trial runs of `render` with a 4500 character output on a Mac with 14
+        cores (= max_workers: 18):
+            * With `generate_async`: 0.094672 s
+            * With `generate`: 0.053963 s
+        """
+        matrix = self.image.get_matrix(regenerate_if_stale=True)
+
+        if self.image.is_opaque:
+            columns, rows = self.image.size.tuple
+        else:
+            columns, rows = self.final_size_chars.tuple
+
+        futures: list[concurrent.futures.Future[list[Character]]] = []
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            for rects in itertools.batched(
+                self.image.size.partition(columns, rows),
+                (columns * rows) // executor._max_workers,
+            ):
+                futures.append(executor.submit(self.__get_character_batch, matrix, rects))
+
+        for future in futures:
+            yield from future.result()
 
     @timer
     def prepare(self):
@@ -229,42 +276,49 @@ class Workhorse:
     @timer
     def __get_character(self, matrix: ImageArray, rect: "IndexedSizePartition") -> Character:
         section = matrix[rect.top : rect.bottom, rect.left : rect.right]
+
+        char = self.__get_section_character_string(section)
+        color = self.__get_section_color(section)
+
+        return Character(char=char, column=rect.column, row=rect.row, color=color)
+
+    @timer
+    def __get_character_batch(self, matrix: ImageArray, rects: Iterable["IndexedSizePartition"]) -> list[Character]:
+        return [self.__get_character(matrix, rect) for rect in rects]
+
+    @timer
+    def __get_section_character_string(self, section: ImageArray) -> str:
         section_area = section.shape[0] * section.shape[1]
 
         if self.image.is_opaque:
-            char = self.shapeset.FILLED.char
-        else:
-            # (array of y coords, array of x coords):
-            nonzero = np.nonzero(section[:, :, -1])
-            filled = nonzero[0].size / section_area
+            return self.shapeset.FILLED.char
 
-            if filled < 0.05:
-                # Micro-optimization 1
-                char = self.shapeset.EMPTY.char
-            elif filled > 0.95:
-                # Micro-optimization 2
-                char = self.shapeset.FILLED.char
-            else:
-                # The values in `nonzero` represent the upper left corners
-                # of visible rectangular areas, but the shape objects will
-                # treat them as _points_, and check if they fit inside of
-                # polygons. Adding 0.5 to our coordinates places them in
-                # the middle of the areas instead.
-                visible_points = (
-                    (np.stack((nonzero[1], nonzero[0]), axis=1) + 0.5)
-                    / np.array((section.shape[1], section.shape[0]))
-                )
-                char = self.shapeset.get_shape(visible_points, section_area, self.config.min_likeness).char
+        # (array of y coords, array of x coords):
+        nonzero = np.nonzero(section[:, :, -1])
+        filled = nonzero[0].size / section_area
 
-        return Character(
-            char=char,
-            column=rect.column,
-            row=rect.row,
-            color=(
-                self.color_converter.get_section_color(section, self.config.color.inference) or
-                self.config.color.default
-            ),
+        if filled < 0.05:
+            # Micro-optimization 1
+            return self.shapeset.EMPTY.char
+
+        if filled > 0.95:
+            # Micro-optimization 2
+            return self.shapeset.FILLED.char
+
+        # The values in `nonzero` represent the upper left corners
+        # of visible rectangular areas, but the shape objects will
+        # treat them as _points_, and check if they fit inside of
+        # polygons. Adding 0.5 to our coordinates places them in
+        # the middle of the areas instead.
+        visible_points = (
+            (np.stack((nonzero[1], nonzero[0]), axis=1) + 0.5)
+            / np.array((section.shape[1], section.shape[0]))
         )
+        return self.shapeset.get_shape(visible_points, section_area, self.config.min_likeness).char
+
+    @timer
+    def __get_section_color(self, section: ImageArray) -> "Color | None":
+        return self.color_converter.get_section_color(section, self.config.color.inference) or self.config.color.default
 
     @timer
     def __update_visibility(self, image: ImagePlus):
@@ -283,7 +337,16 @@ class Workhorse:
 
     @classmethod
     @timer
-    def load(cls, file: str | bytes | PathLike | Path | IO[bytes], config: "Config | None" = None) -> Self:
+    def load_file(cls, filename: str | Path, config: "Config | None" = None) -> Self:
+        if isinstance(filename, Path):
+            filename = filename.name
+        if filename.lower().endswith(".svg"):
+            return cls.load_svg(filename, config)
+        return cls.load_image(filename, config)
+
+    @classmethod
+    @timer
+    def load_image(cls, file: str | bytes | PathLike | Path | IO[bytes], config: "Config | None" = None) -> Self:
         from image2ascii.config import Config
 
         return cls(ImagePlus.load(file), config or Config())

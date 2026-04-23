@@ -89,22 +89,19 @@ class CliFileConvertSettings(CliConvertSettings, BaseCliSubCommand, extra="ignor
             self.color.inference = ColorInferenceMethod.MOST_COMMON
             self.min_likeness = 1.0
 
-        if self.filename.lower().endswith(".svg"):
-            horse = Workhorse.load_svg(self.filename, self)
-        else:
-            horse = Workhorse.load(self.filename, self)
-
-        if self.outfile:
-            renderer = ImageRenderer(self.outfile_size)
-            renderer.image.save(self.outfile)
-            logger.info(f"Wrote {self.outfile}.")
-        else:
-            renderer = ConsoleRenderer(
-                margins=self.margins,
-                border=self.border,
-                border_color=self.color.border or self.color.default,
-            )
-            horse.prepare_and_render(renderer)
+        with Workhorse.load_file(self.filename, self) as horse:
+            if self.outfile:
+                renderer = ImageRenderer(self.outfile_size)
+                horse.prepare_and_render(renderer)
+                renderer.image.save(self.outfile)
+                logger.info(f"Wrote {self.outfile}.")
+            else:
+                renderer = ConsoleRenderer(
+                    margins=self.margins,
+                    border=self.border,
+                    border_color=self.color.border or self.color.default,
+                )
+                horse.prepare_and_render(renderer)
 
         if self.debug:
             print_results()

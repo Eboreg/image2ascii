@@ -20,24 +20,36 @@ class Color:
     array: RGBA
 
     @property
+    @timer
     def ansi(self) -> str:
-        return "\x1b[" + ";".join(self.ansi_codes) + "m"
+        return f"\x1b[38;2;{self.array[R]};{self.array[G]};{self.array[B]}m"
 
     @property
+    @timer
     def ansi_background(self) -> str:
-        return "\x1b[" + ";".join(self.ansi_codes_background) + "m"
+        return f"\x1b[48;2;{self.array[R]};{self.array[G]};{self.array[B]}m"
 
     @property
-    def ansi_codes(self) -> list[str]:
-        return ["38", "2", str(self.array[R]), str(self.array[G]), str(self.array[B])]
+    def b(self) -> int:
+        return self.array[B]
 
     @property
-    def ansi_codes_background(self) -> list[str]:
-        return ["48", "2", str(self.array[R]), str(self.array[G]), str(self.array[B])]
-
-    @property
+    @timer
     def css(self) -> str:
+        return f"#{self.array[R]:02x}{self.array[G]:02x}{self.array[B]:02x}"
+
+    @property
+    @timer
+    def css_rgba(self) -> str:
         return f"#{self.array[R]:02x}{self.array[G]:02x}{self.array[B]:02x}{self.array[A]:02x}"
+
+    @property
+    def g(self) -> int:
+        return self.array[G]
+
+    @property
+    def r(self) -> int:
+        return self.array[R]
 
     @property
     def rgba_tuple(self) -> tuple[int, ...]:
@@ -46,10 +58,14 @@ class Color:
     @timer
     def __init__(self, array: RGBA):
         self.array = array
+        self.__hash = hash(self.rgba_tuple)
 
     @timer
     def __eq__(self, value: object) -> bool:
-        return isinstance(value, Color) and bool(np.all(self.array == value.array))
+        return isinstance(value, Color) and hash(value) == hash(self)
+
+    def __hash__(self) -> int:
+        return self.__hash
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.array[R]}, {self.array[G]}, {self.array[B]}, {self.array[A]})"
@@ -129,16 +145,18 @@ class Color:
 
 class AnsiColor(Color):
     @property
-    def ansi_codes(self):
-        return [str(self.code)]
+    @timer
+    def ansi(self) -> str:
+        return f"\x1b[{self.code}m"
 
     @property
-    def ansi_codes_background(self):
-        return [str(self.bg_code)]
+    @timer
+    def ansi_background(self) -> str:
+        return f"\x1b[{self.bg_code}m"
 
     @timer
     def __init__(self, name: str, red: int, green: int, blue: int, code: int, bg_code: int, alpha: int = 0xFF):
-        self.array = np.array([red, green, blue, alpha], dtype=np.uint8)
+        super().__init__(np.array([red, green, blue, alpha], dtype=np.uint8))
         self.code = code
         self.bg_code = bg_code
         self.name = name

@@ -8,6 +8,7 @@ from image2ascii.color_converters import (
 )
 from image2ascii.config import Config
 from image2ascii.geometry import DefaultShapes, SolidShapes
+from image2ascii.logging import get_logger
 from image2ascii.workhorse import Workhorse
 
 
@@ -22,3 +23,5 @@ __all__ = [
     "Workhorse",
 ]
 __version__ = version("image2ascii")
+
+logger = get_logger(__name__)

@@ -99,18 +99,22 @@ def partition(value: int, num_parts: int):
     return result
 
 
-def split_list(lst: Sequence[_T], deliminators: _T | Sequence[_T]) -> list[Sequence[_T]]:
+def sequence_startswith(sequence: Sequence[_T], prefix: Sequence[_T]) -> bool:
+    return len(prefix) <= len(sequence) and sequence[:len(prefix)] == prefix
+
+
+def split_sequence(sequence: Sequence[_T], deliminators: _T | Sequence[_T]) -> list[Sequence[_T]]:
     if not isinstance(deliminators, Sequence):
         deliminators = [deliminators]
     result: list[Sequence[_T]] = []
     start_idx = 0
 
-    for idx in range(len(lst)):
-        if lst[idx] in deliminators:
+    for idx in range(len(sequence)):
+        if sequence[idx] in deliminators:
             if idx > start_idx:
-                result.append(lst[start_idx:idx])
+                result.append(sequence[start_idx:idx])
             start_idx = idx + 1
-        elif idx == len(lst) - 1:
-            result.append(lst[start_idx:])
+        elif idx == len(sequence) - 1:
+            result.append(sequence[start_idx:])
 
     return result

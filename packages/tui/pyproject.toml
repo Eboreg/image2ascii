@@ -1,5 +1,5 @@
 [project]
-name = "image2ascii-textual"
+name = "image2ascii-tui"
 version = "0.1.0"
 description = ""
 readme = "README.md"
@@ -12,9 +12,17 @@ dependencies = [
     "textual>=8.2.4",
 ]
 
+[project.entry-points.i2a_plugins]
+tui = "image2ascii_tui"
+
 [build-system]
 requires = ["uv_build>=0.9.7,<0.10.0"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
 image2ascii = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "textual-dev>=1.8.0",
+]

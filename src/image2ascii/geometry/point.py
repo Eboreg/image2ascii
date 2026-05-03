@@ -2,7 +2,6 @@ import dataclasses
 from abc import ABC
 from typing import Generic
 
-from image2ascii.enums import RoundMethod
 from image2ascii.types import NumberT
 
 
@@ -22,11 +21,24 @@ class Point(AbstractPoint[int]):
     x: int
     y: int
 
+    def to_point_f(self) -> "PointF":
+        return PointF(self.x, self.y)
+
 
 @dataclasses.dataclass
 class PointF(AbstractPoint[float]):
     x: float
     y: float
 
-    def to_point(self, method: RoundMethod = RoundMethod.FLOOR) -> "Point":
-        return Point(method.round(self.x), method.round(self.y))
+    def __add__(self, other: "float | PointF") -> "PointF":
+        if isinstance(other, PointF):
+            return PointF(self.x + other.x, self.y + other.y)
+        return PointF(self.x + other, self.y + other)
+
+    def __mul__(self, other: "float | PointF") -> "PointF":
+        if isinstance(other, PointF):
+            return PointF(self.x * other.x, self.y * other.y)
+        return PointF(self.x * other, self.y * other)
+
+    def coerce_between(self, start: "PointF", end: "PointF"):
+        return PointF(min(max(self.x, start.x), end.x), min(max(self.y, start.y), end.y))

@@ -1,3 +1,4 @@
+from functools import cached_property
 from typing import Literal
 
 import platformdirs
@@ -12,7 +13,7 @@ from pydantic_settings import (
 )
 
 from image2ascii.color import ANSI_COLOR_DICT
-from image2ascii.color_converters import FullRGBColorConverter
+from image2ascii.color_converters import AbstractColorConverter, FullRGBColorConverter, concrete_converter_classes
 from image2ascii.config_types import (
     ColorConverterType,
     ColorInferenceMethodType,
@@ -32,10 +33,8 @@ DEFAULT_MIN_VISIBLE_BRIGHTNESS = 0x30
 DEFAULT_QUALITY = 5
 DEFAULT_VIEWPORT_COLUMNS = 100
 DEFAULT_VIEWPORT_ROWS = 50
-
-
-def get_app_dirs():
-    return platformdirs.PlatformDirs("image2ascii", ensure_exists=True)
+APP_DIRS = platformdirs.PlatformDirs("image2ascii", ensure_exists=True)
+CONFIG_FILE = APP_DIRS.user_config_path / "config.yaml"
 
 
 class TransparencySettings(BaseModel, validate_assignment=True, extra="ignore"):
@@ -47,14 +46,14 @@ class TransparencySettings(BaseModel, validate_assignment=True, extra="ignore"):
             "different in colour to the background (will only work if there actually is a background colour set). "
             "'brightness': areas are transparent if they are darker than 'min_brightness'. Will normally only be used "
             "if 'bgdistance' is not. 'alpha': areas are transparent if their alpha value is less than 'min_alpha'. "
-            "Will be used even if any of the other two are."
+            "Will be used even if any of the other two are"
         ),
     )
-    force_brightness: bool = Field(
+    force_brightness: CliToggleFlag[bool] = Field(
         default=False,
         description=(
             "If 'methods' contains both 'bgdistance' and 'brightness', use the 'brightness' method even if a "
-            "background colour exists (normally, 'brightness' is skipped in this case)."
+            "background colour exists (normally, 'brightness' is skipped in this case)"
         ),
     )
     alpha: int = Field(
@@ -120,21 +119,22 @@ class ViewportSettings(BaseSettings, validate_assignment=True, extra="ignore"):
 
 class EffectSettings(BaseSettings, validate_assignment=True, extra="ignore"):
     brightness: float = Field(default=1.0, ge=0, description="0 = completely black image")
-    color_balance: float = Field(default=1.0)
-    contrast: float = Field(default=1.0)
+    color_balance: float = Field(default=1.0, description="0 = grayscale")
+    contrast: float = Field(default=1.0, description="0 = a gray sludge")
     invert: bool = Field(default=False, description="Invert all character colours")
+    mirror: bool = Field(default=False)
+    rotate: float = Field(default=0.0, description="In degrees, counter-clockwise")
     sharpness: float = Field(default=1.0)
 
 
 class ColorSettings(BaseSettings, validate_assignment=True, extra="ignore"):
     background: NullableColorType = ANSI_COLOR_DICT["BLACK"]
-    converter: ColorConverterType = Field(
+    converter_type: ColorConverterType = Field(
         default=FullRGBColorConverter,
+        alias="converter",
         description=(
             "Class responsible for interpreting colours. Built-in choices (with shorthands for convenience): "
-            "NullColorConverter ('null'), GrayScaleColorConverter ('grayscale'), AnsiColorConverter ('ansi'), "
-            "FullRGBColorConverter ('rgb')"
-        ),
+        ) + ", ".join(f"{cc.__name__} ('{cc.SHORTHAND}')" for cc in concrete_converter_classes())
     )
     inference: ColorInferenceMethodType = Field(
         default=ColorInferenceMethod.MEDIAN,
@@ -145,15 +145,23 @@ class ColorSettings(BaseSettings, validate_assignment=True, extra="ignore"):
     )
     default: NullableColorType = Field(
         default=None,
-        description="Fill colour to use when there is no other available."
+        description="Fill colour to use when there is no other available"
     )
+
+    @property
+    def actual_background(self):
+        return self.converter.closest(self.background) if self.background else None
+
+    @cached_property
+    def converter(self) -> AbstractColorConverter:
+        return self.converter_type()
 
 
 class Config(
     BaseSettings,
     validate_assignment=True,
     extra="ignore",
-    yaml_file=get_app_dirs().user_config_path / "config.yaml",
+    yaml_file=CONFIG_FILE,
 ):
     char_ratio: float = Field(
         default=DEFAULT_CHAR_RATIO,
@@ -168,7 +176,7 @@ class Config(
         default=DEFAULT_MIN_LIKENESS,
         description=(
             "Small performance tweak: For each partly transparent image section, pick the first character that is at "
-            "least this similar to it. Set to 1 to always loop through all characters."
+            "least this similar to it. Smaller = slightly faster. Set to 1 to always loop through all characters"
         ),
     )
     quality: int = Field(
@@ -176,7 +184,13 @@ class Config(
         gt=0,
         description="Higher value = more accurate results but also slower",
     )
-    resample: ResampleType = Resampling.NEAREST
+    resample: ResampleType = Field(
+        default=Resampling.NEAREST,
+        description=(
+            "Resampling filter to use when resizing and rotating images. `NEAREST` is more than a thousand times "
+            "faster than the closest runner-up"
+        ),
+    )
     shapeset: ShapeSetType = Field(
         default=DefaultShapes,
         description=(
@@ -186,7 +200,7 @@ class Config(
     )
     transparency: TransparencySettings = Field(
         default_factory=TransparencySettings,
-        validation_alias=AliasChoices("trans", "transparency"),
+        validation_alias=AliasChoices("transparency", "t"),
     )
     viewport: ViewportSettings = Field(default_factory=ViewportSettings)
 

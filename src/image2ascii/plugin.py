@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, ClassVar
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any, ClassVar
 
+from pydantic.fields import FieldInfo
 from pydantic_settings import BaseSettings
 
 
@@ -14,7 +16,8 @@ class BaseCliSubCommand(BaseSettings, ABC):
 
 
 class BasePlugin:
-    cli_subcommands: ClassVar[dict[str, type[BaseCliSubCommand]]] = {}
+    cli_subcommands: ClassVar[dict[str, type[BaseCliSubCommand] | tuple[type[BaseCliSubCommand], FieldInfo]]] = {}
+    completers: ClassVar[dict[str, Callable[[Any], Sequence[str]]]] = {}
 
     def pre_enhance(self, image: "ImagePlus"): ...
 

@@ -1,6 +1,6 @@
 [project]
 name = "image2ascii"
-version = "0.10.1"
+version = "0.11.0"
 description = "Turns images into ASCII art. This is just the core library; make sure to install some extras, too."
 readme = "README.md"
 authors = [
@@ -8,16 +8,30 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "cairosvg>=2.9.0",
     "matplotlib>=3.10.8",
     "numpy>=2.4.4",
     "pillow>=12.2.0",
     "platformdirs>=4.9.6",
     "pydantic>=2.13.1",
     "pydantic-settings>=2.13.1",
+    "requests>=2.33.1",
 ]
 license = "GPL-3.0-only"
 license-files = ["LICENSE"]
+
+[project.optional-dependencies]
+svg = [
+    "cairosvg>=2.9.0",
+]
+cli = [
+    "image2ascii-cli",
+]
+emoji = [
+    "image2ascii-emoji",
+]
+tui = [
+    "image2ascii-tui",
+]
 
 [build-system]
 requires = ["uv_build>=0.9.7,<0.10.0"]
@@ -27,32 +41,23 @@ build-backend = "uv_build"
 members = [
     "packages/cli",
     "packages/emoji",
-    "packages/textual",
+    "packages/tui",
 ]
 
 [tool.uv.sources]
-image2ascii-emoji = { workspace = true }
 image2ascii-cli = { workspace = true }
-image2ascii-textual = { workspace = true }
+image2ascii-emoji = { workspace = true }
+image2ascii-tui = { workspace = true }
 
 [dependency-groups]
-cli = [
-    "image2ascii-cli",
-]
 dev = [
     "image2ascii-cli",
     "image2ascii-emoji",
-    "image2ascii-textual",
+    "image2ascii-tui",
     "ipdb>=0.13.13",
     "ipython>=9.12.0",
     "ruff>=0.15.10",
     "ty>=0.0.31",
-]
-emoji = [
-    "image2ascii-emoji",
-]
-textual = [
-    "image2ascii-textual",
 ]
 
 [tool.ruff]

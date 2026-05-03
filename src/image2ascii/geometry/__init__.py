@@ -1,11 +1,12 @@
 from .point import Point, PointF
 from .rect import Rect, RectF
-from .shape import DefaultShapes, EmptyShape, FilledShape, PolygonShape, ShapeSet, SolidShapes
+from .shape import BiColorShape, DefaultShapes, EmptyShape, FilledShape, PolygonShape, Shape, ShapeSet, SolidShapes
 from .size import IndexedSizePartition, Size, SizeF
 from .subrect import SubRect, SubRectF
 
 
 __all__ = [
+    "BiColorShape",
     "DefaultShapes",
     "EmptyShape",
     "FilledShape",
@@ -15,6 +16,7 @@ __all__ = [
     "PolygonShape",
     "Rect",
     "RectF",
+    "Shape",
     "ShapeSet",
     "Size",
     "SizeF",

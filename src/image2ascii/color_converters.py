@@ -1,4 +1,6 @@
+import sys
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from typing import ClassVar, Literal
 
 import numpy as np
@@ -48,6 +50,7 @@ class AbstractColorConverter(ABC):
 
 class NullColorConverter(AbstractColorConverter):
     """No colours at all. :-("""
+
     SHORTHAND = "null"
 
     def closest(self, color):
@@ -86,3 +89,23 @@ class FullRGBColorConverter(AbstractColorConverter):
 
     def closest(self, color):
         return color
+
+
+class SimpleRGBColorConverter(AbstractColorConverter):
+    SHORTHAND = "simple-rgb"
+
+    def closest(self, color):
+        return Color(color.array // 0x10 * 0x10)
+
+
+def concrete_converter_classes() -> Iterator[type[AbstractColorConverter]]:
+    module = sys.modules[__name__]
+
+    for name in dir(module):
+        member = getattr(module, name)
+        if (
+            isinstance(member, type)
+            and issubclass(member, AbstractColorConverter)
+            and member is not AbstractColorConverter
+        ):
+            yield member

@@ -12,7 +12,7 @@ from image2ascii.utils import partition
 
 
 if TYPE_CHECKING:
-    from image2ascii.geometry import PointF, RectF, SubRectF
+    from image2ascii.geometry import PointF, Rect, SubRectF
 
 
 class AbstractSize(ABC, Generic[NumberT]):
@@ -64,12 +64,12 @@ class SizeF(AbstractSize[float]):
         from image2ascii.geometry import PointF, RectF, SubRectF
 
         center = center or PointF(0.5, 0.5)
-        left = max(self.width - container.width, 0) * center.x
-        top = max(self.height - container.height, 0) * center.y
-        right = left + min(container.width, self.width)
-        bottom = top + min(container.height, self.height)
+        width = min(self.width, container.width)
+        height = min(self.height, container.height)
+        left = (self.width * center.x) - (container.width / 2)
+        top = (self.height * center.y) - (container.height / 2)
 
-        return SubRectF(self, RectF(x=left, y=top, width=right - left, height=bottom - top))
+        return SubRectF(self, RectF(x=left, y=top, width=width, height=height))
 
     @timer
     def fit_inside(self, other: "SizeF", grow: bool = True) -> "SizeF":
@@ -90,11 +90,6 @@ class SizeF(AbstractSize[float]):
         if ratio < self.ratio:
             return SizeF(self.height * ratio, self.height)
         return SizeF(self.width, self.width / ratio)
-
-    def to_rect_f(self, x: float = 0, y: float = 0) -> "RectF":
-        from image2ascii.geometry import RectF
-
-        return RectF(x, y, self.width, self.height)
 
     @timer
     def to_size(self, method: RoundMethod = RoundMethod.FLOOR, round_for_ratio: bool = False) -> "Size":
@@ -159,6 +154,11 @@ class Size(AbstractSize[int]):
                 left += width
 
             top += height
+
+    def to_rect(self, x: int = 0, y: int = 0) -> "Rect":
+        from image2ascii.geometry import Rect
+
+        return Rect(x, y, self.width, self.height)
 
     def to_size_f(self) -> "SizeF":
         return SizeF(self.width, self.height)

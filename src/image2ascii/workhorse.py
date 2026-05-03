@@ -1,15 +1,27 @@
-import concurrent.futures
-import itertools
-from collections.abc import Iterable, Iterator
+import re
+from collections.abc import Iterator
 from os import PathLike
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, Self
+from typing import IO, TYPE_CHECKING, Literal, Self
 
-import numpy as np
+import requests
 
-from image2ascii.character import Character
-from image2ascii.geometry import SizeF, SubRectF
+from image2ascii.color import A
+from image2ascii.geometry import BiColorShape, PointF, SizeF, SubRect
 from image2ascii.image import ImagePlus
+from image2ascii.output import (
+    BackgroundEnd,
+    BackgroundStart,
+    Character,
+    ColorEnd,
+    ColorStart,
+    Linebreak,
+    OutputAtom,
+    OutputEnd,
+    OutputStart,
+    RowEnd,
+    RowStart,
+)
 from image2ascii.registry import Registry
 from image2ascii.timing import timer
 from image2ascii.types import ImageArray
@@ -17,9 +29,8 @@ from image2ascii.types import ImageArray
 
 if TYPE_CHECKING:
     from image2ascii.color import Color
-    from image2ascii.color_converters import AbstractColorConverter
     from image2ascii.config import Config
-    from image2ascii.geometry import IndexedSizePartition, PointF, ShapeSet, Size, SubRect
+    from image2ascii.geometry import Shape, Size
     from image2ascii.renderers import AbstractRenderer
 
 
@@ -41,12 +52,11 @@ class Workhorse:
     opaque, we know that all possible parts of it also are, so zoom() doesn't
     even need to check that. See also comments in image.py.
     """
-    color_converter: "AbstractColorConverter"
+
     config: "Config"
     image: ImagePlus
     is_whole_image_opaque: bool = False
     original_image: ImagePlus
-    shapeset: type["ShapeSet"]
     visible_cropbox: "SubRect | None" = None
 
     @property
@@ -74,19 +84,11 @@ class Workhorse:
         return self.final_size_chars_f * self.config.quality / SizeF(1, self.config.char_ratio)
 
     @timer
-    def __init__(
-        self,
-        image: ImagePlus,
-        config: "Config",
-        color_converter: "AbstractColorConverter | None" = None,
-        shapeset: "type[ShapeSet] | None" = None,
-    ):
-        self.config = config.model_copy()
-        self.color_converter = color_converter or config.color.converter()
-        self.shapeset = shapeset or config.shapeset
+    def __init__(self, image: ImagePlus, config: "Config"):
+        self.config = config
         self.original_image = image
         self.image = image.copy()
-        self.plugins = Registry.singleton()
+        self.plugins = Registry()
 
     def __enter__(self):
         return self
@@ -95,44 +97,104 @@ class Workhorse:
         pass
 
     @timer
-    def generate(self) -> Iterator[Character]:
+    def generate_output(self) -> Iterator[OutputAtom]:
+        image_background = self.__get_background()
         matrix = self.image.get_matrix(regenerate_if_stale=True)
+        current_column = current_row = 0
+        current_background: "Color | None" = None
+        current_color: "Color | None" = None
 
         if self.image.is_opaque:
             columns, rows = self.image.size.tuple
         else:
             columns, rows = self.final_size_chars.tuple
+
+        yield OutputStart(background=image_background)
+        yield RowStart(row=0, background=image_background)
 
         for rect in self.image.size.partition(columns, rows):
-            yield self.__get_character(matrix, rect)
+            current_column = rect.column
+            section = matrix[rect.top : rect.bottom, rect.left : rect.right]
+            shape = self.__get_section_shape(section)
+            opacity = self.__get_section_opacity(section) if shape.supports_opacity else 1
+
+            if rect.row != current_row:
+                yield RowEnd(row=current_row, background=image_background)
+                yield Linebreak(old_row=current_row, new_row=rect.row)
+                current_row = rect.row
+                yield RowStart(row=current_row, background=image_background)
+                # Trigger a redraw of foreground colour for next character:
+                if current_color:
+                    yield ColorEnd(color=current_color, column=current_column, row=current_row)
+                    current_color = None
+
+            if isinstance(shape, BiColorShape):
+                section_color, section_background = self.__get_section_bicolor(section, shape.filled_part)
+            else:
+                section_color = self.__get_section_color(section)
+                section_background = image_background
+
+            if section_background != current_background:
+                if current_background:
+                    yield BackgroundEnd(column=current_column, row=current_row, color=current_background)
+                if section_background:
+                    yield BackgroundStart(color=section_background, column=current_column, row=current_row)
+                current_background = section_background
+
+            if section_color != current_color:
+                if current_color:
+                    yield ColorEnd(column=current_column, row=current_row, color=current_color)
+                if section_color:
+                    yield ColorStart(color=section_color, column=current_column, row=current_row)
+                current_color = section_color
+
+            yield Character(
+                shape=shape,
+                column=current_column,
+                row=current_row,
+                opacity=opacity,
+                color=current_color,
+                background=current_background,
+            )
+
+        yield RowEnd(row=current_row, background=image_background)
+        if current_color:
+            yield ColorEnd(column=0, row=current_row + 1, color=current_color)
+        if current_background:
+            yield BackgroundEnd(column=0, row=current_row + 1, color=current_background)
+        yield OutputEnd(background=image_background)
 
     @timer
-    def generate_async(self) -> Iterator[Character]:
+    def get_center_constraints(self, zoom_factor: float):
         """
-        Not necessarily more effective than `generate`, so not used ATM.
-        Trial runs of `render` with a 4500 character output on a Mac with 14
-        cores (= max_workers: 18):
-            * With `generate_async`: 0.094672 s
-            * With `generate`: 0.053963 s
+        Given a zoom factor, return the highest and lowest values the `center`
+        argument to self.zoom() may have without "panning past" the image.
         """
-        matrix = self.image.get_matrix(regenerate_if_stale=True)
-
-        if self.image.is_opaque:
-            columns, rows = self.image.size.tuple
+        if self.visible_cropbox:
+            image_size = self.visible_cropbox.rect.size.to_size_f()
         else:
-            columns, rows = self.final_size_chars.tuple
+            image_size = self.original_image.size.to_size_f()
 
-        futures: list[concurrent.futures.Future[list[Character]]] = []
+        fitted_image_size = image_size.fit_inside(self.config.viewport_size_px)
+        zoomed_image_size = fitted_image_size * zoom_factor
+        viewport_image_ratio = self.config.viewport_size_px / zoomed_image_size
+        min_center_x = min(viewport_image_ratio.width, 1) / 2
+        min_center_y = min(viewport_image_ratio.height, 1) / 2
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            for rects in itertools.batched(
-                self.image.size.partition(columns, rows),
-                (columns * rows) // executor._max_workers,
-            ):
-                futures.append(executor.submit(self.__get_character_batch, matrix, rects))
+        return PointF(min_center_x, min_center_y), PointF(1 - min_center_x, 1 - min_center_y)
 
-        for future in futures:
-            yield from future.result()
+    @timer
+    def get_pan_steps(self, zoom_factor: float, viewport_step: float = 0.5):
+        """
+        Given a zoom factor, return the increments to add to the `center`
+        argument to self.zoom() in order to pan the image by `viewport_step`
+        viewports.
+
+        Yes, this is all getting terribly complicated to reason about, and I
+        should probably simplify it somehow.
+        """
+        min_center = self.get_center_constraints(zoom_factor)[0]
+        return PointF(min_center.x * 2 * viewport_step, min_center.y * 2 * viewport_step)
 
     @timer
     def prepare(self):
@@ -157,22 +219,27 @@ class Workhorse:
               regenerated next time it's needed, and will then not have any
               visibility info.
         """
-        self.image.resize(self.final_size_px)  # 1
+        self.image.resize(self.final_size_px, resample=self.config.resample)  # 1
         self.__enhance(self.image)  # 2
         self.__update_visibility(self.image)  # 3
 
         if self.config.crop:  # 4
             self.visible_cropbox = self.image.get_visible_cropbox(regenerate_matrix_if_stale=True)
-            self.image.crop(self.visible_cropbox)
+            if self.visible_cropbox.is_cropped:
+                self.image.crop(self.visible_cropbox)
+        else:
+            # Just so zoom() knows this has already been done, and doesn't do
+            # any redundant work:
+            self.visible_cropbox = SubRect.from_size(self.image.size)
 
         if self.image.is_opaque:
             self.is_whole_image_opaque = True
-            self.image.resize(self.final_size_chars)  # 5.1
+            self.image.resize(self.final_size_chars, resample=self.config.resample)  # 5.1
             self.image.pixel_ratio = 1 / self.config.char_ratio  # 5.2
-            self.image.fill_transparency(self.config.color.background)  # 5.3
+            self.image.fill_transparency(self.__get_background())  # 5.3
         else:
             self.is_whole_image_opaque = False
-            self.image.resize(self.final_size_px)  # 6.1
+            self.image.resize(self.final_size_px, resample=self.config.resample)  # 6.1
             if self.image.is_matrix_stale:
                 self.__update_visibility(self.image)  # 6.2
 
@@ -185,15 +252,9 @@ class Workhorse:
         renderer.start(
             original_ratio=self.final_size_px_f.ratio,
             size_chars=self.final_size_chars,
-            background=(
-                self.color_converter.closest(self.config.color.background)
-                if self.config.color.background
-                else None
-            ),
         )
-        for character in self.generate():
-            renderer.render_character(character)
-        renderer.finish()
+        for atom in self.generate_output():
+            renderer.render_atom(atom)
 
     def zoom_and_render(self, renderer: "AbstractRenderer", factor: float, center: "PointF | None" = None):
         self.zoom(factor, center)
@@ -236,13 +297,20 @@ class Workhorse:
         """
         self.image = self.original_image.copy()
         image_size = self.image.size.to_size_f()
-        cropbox = SubRectF(image_size, image_size.to_rect_f())
+        cropbox = SubRect.from_size(self.image.size).to_subrect_f()
 
         if self.visible_cropbox:  # 1
             cropbox = self.visible_cropbox.to_subrect_f().scale_container(image_size)
             image_size = cropbox.rect.size
+        elif self.config.crop:
+            cropbox = self.image.get_visible_cropbox(regenerate_matrix_if_stale=True).to_subrect_f()
 
         resized_viewport = self.config.viewport_size_px.fit_outside(image_size) * (1 / factor)  # 2
+        # `center` is the relative point in the image where the viewport will
+        # be centered (top left=(0, 0), bottom right=(1, 1)). But we want to
+        # limit this value so the viewport doesn't "pan past" the image.
+        if center is not None:
+            center = center.coerce_between(*self.get_center_constraints(factor))
         cropbox = cropbox.crop_to_size(resized_viewport, center)  # 3
         self.image.crop(cropbox.to_subrect(round_for_ratio=True))  # 4
 
@@ -252,16 +320,17 @@ class Workhorse:
             self.__update_visibility(self.image)
 
         if self.is_whole_image_opaque or self.image.is_opaque:
-            self.image.resize(self.final_size_chars)  # 6.1
+            self.image.resize(self.final_size_chars, resample=self.config.resample)  # 6.1
             self.image.pixel_ratio = 1 / self.config.char_ratio  # 6.2
             self.__enhance(self.image)  # 6.3
-            self.image.fill_transparency(self.config.color.background)  # 6.4
+            self.image.fill_transparency(self.__get_background())  # 6.4
         else:
-            self.image.resize(self.final_size_px)  # 7.1
+            self.image.resize(self.final_size_px, resample=self.config.resample)  # 7.1
             self.__enhance(self.image)  # 7.2
             if self.image.is_matrix_stale:
                 self.__update_visibility(self.image)  # 7.3
 
+    @timer
     def __enhance(self, image: ImagePlus):
         self.plugins.pre_enhance(image)
         image.enhance(
@@ -270,65 +339,66 @@ class Workhorse:
             contrast=self.config.effect.contrast,
             sharpness=self.config.effect.sharpness,
             invert=self.config.effect.invert,
+            mirror=self.config.effect.mirror,
+            rotate=self.config.effect.rotate,
+            resample=self.config.resample,
         )
         self.plugins.post_enhance(image)
 
     @timer
-    def __get_character(self, matrix: ImageArray, rect: "IndexedSizePartition") -> Character:
-        section = matrix[rect.top : rect.bottom, rect.left : rect.right]
-
-        char = self.__get_section_character_string(section)
-        color = self.__get_section_color(section)
-
-        return Character(char=char, column=rect.column, row=rect.row, color=color)
-
-    @timer
-    def __get_character_batch(self, matrix: ImageArray, rects: Iterable["IndexedSizePartition"]) -> list[Character]:
-        return [self.__get_character(matrix, rect) for rect in rects]
-
-    @timer
-    def __get_section_character_string(self, section: ImageArray) -> str:
-        section_area = section.shape[0] * section.shape[1]
-
-        if self.image.is_opaque:
-            return self.shapeset.FILLED.char
-
-        # (array of y coords, array of x coords):
-        nonzero = np.nonzero(section[:, :, -1])
-        filled = nonzero[0].size / section_area
-
-        if filled < 0.05:
-            # Micro-optimization 1
-            return self.shapeset.EMPTY.char
-
-        if filled > 0.95:
-            # Micro-optimization 2
-            return self.shapeset.FILLED.char
-
-        # The values in `nonzero` represent the upper left corners
-        # of visible rectangular areas, but the shape objects will
-        # treat them as _points_, and check if they fit inside of
-        # polygons. Adding 0.5 to our coordinates places them in
-        # the middle of the areas instead.
-        visible_points = (
-            (np.stack((nonzero[1], nonzero[0]), axis=1) + 0.5)
-            / np.array((section.shape[1], section.shape[0]))
+    def __get_background(self) -> "Color | None":
+        return (
+            self.config.color.converter.closest(self.config.color.background)
+            if self.config.color.background
+            else None
         )
-        return self.shapeset.get_shape(visible_points, section_area, self.config.min_likeness).char
+
+    @timer
+    def __get_section_bicolor(
+        self,
+        section: ImageArray,
+        filled_part: Literal["top", "bottom"],
+    ) -> tuple["Color | None", "Color | None"]:
+        """Returns: (foreground, background)"""
+        center = section.shape[0] // 2
+        top = self.config.color.converter.get_section_color(section[:center], self.config.color.inference)
+        bottom = self.config.color.converter.get_section_color(section[center:], self.config.color.inference)
+        background = self.__get_background()
+
+        if filled_part == "top":
+            return top or background, bottom or background
+        return top or background, bottom or background
 
     @timer
     def __get_section_color(self, section: ImageArray) -> "Color | None":
-        return self.color_converter.get_section_color(section, self.config.color.inference) or self.config.color.default
+        return (
+            self.config.color.converter.get_section_color(section, self.config.color.inference)
+            or self.config.color.default
+        )
+
+    @timer
+    def __get_section_opacity(self, section: ImageArray) -> float:
+        """Scale: 0..1"""
+        return section[:, :, A].mean() / 0xFF
+
+    @timer
+    def __get_section_shape(self, section: ImageArray) -> "Shape":
+        if self.image.is_opaque:
+            return self.config.shapeset.FILLED
+
+        return self.config.shapeset.get_shape(section, self.config.min_likeness)
 
     @timer
     def __update_visibility(self, image: ImagePlus):
+        background = self.__get_background()
+
         # First check if we should determine visibility by background colour
         # (dis-)similarity:
-        if self.config.color.background and self.config.transparency.use_bgdistance(bool(self.config.color.background)):
-            image.update_visibility_by_bgdistance(self.config.color.background, self.config.transparency.bg_distance)
+        if background and self.config.transparency.use_bgdistance(bool(background)):
+            image.update_visibility_by_bgdistance(background, self.config.transparency.bg_distance)
 
         # Maybe we should let "perceived brightness" do its thing:
-        if self.config.transparency.use_brightness(bool(self.config.color.background)):
+        if self.config.transparency.use_brightness(bool(background)):
             image.update_visibility_by_brightness(self.config.transparency.brightness)
 
         # Check if there are literally transparent pixels:
@@ -337,12 +407,14 @@ class Workhorse:
 
     @classmethod
     @timer
-    def load_file(cls, filename: str | Path, config: "Config | None" = None) -> Self:
-        if isinstance(filename, Path):
-            filename = filename.name
-        if filename.lower().endswith(".svg"):
-            return cls.load_svg(filename, config)
-        return cls.load_image(filename, config)
+    def load_file(cls, path: str | Path, config: "Config | None" = None) -> Self:
+        if isinstance(path, Path):
+            path = str(path)
+        if re.match(r"^https?://", path):
+            return cls.load_http(url=path, config=config)
+        if path.lower().endswith(".svg"):
+            return cls.load_svg(path, config)
+        return cls.load_image(path, config)
 
     @classmethod
     @timer
@@ -357,5 +429,13 @@ class Workhorse:
         from image2ascii.config import Config
 
         config = config or Config()
-
         return cls(ImagePlus.load_svg(file, output_size=config.viewport_size_px), config)
+
+    @classmethod
+    @timer
+    def load_http(cls, url: str, config: "Config | None" = None) -> Self:
+        response = requests.get(url, allow_redirects=True, timeout=10)
+        if response.headers.get("Content-Type") == "image/svg+xml":
+            return cls.load_svg(file=response.content, config=config)
+        else:
+            return cls.load_image(file=response.content, config=config)

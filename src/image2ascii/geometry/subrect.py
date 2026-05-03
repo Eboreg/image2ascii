@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 @dataclasses.dataclass
 class SubRect:
     """A sized and positioned rectangle in relation to a sized rectangle."""
+
     container: "Size"
     rect: "Rect"
 
@@ -24,6 +25,15 @@ class SubRect:
     @property
     def crop_tuple(self) -> tuple[int, int, int, int]:
         return self.rect.crop_tuple
+
+    @property
+    def is_cropped(self) -> bool:
+        return (
+            self.rect.left != 0
+            or self.rect.top != 0
+            or self.rect.right != self.container.width
+            or self.rect.bottom != self.container.height
+        )
 
     @property
     def left(self) -> int:
@@ -42,6 +52,10 @@ class SubRect:
 
     def to_subrect_f(self) -> "SubRectF":
         return SubRectF(container=self.container.to_size_f(), rect=self.rect.to_rect_f())
+
+    @classmethod
+    def from_size(cls, size: "Size"):
+        return cls(size, size.to_rect())
 
     @classmethod
     @timer
@@ -79,6 +93,7 @@ class SubRect:
 @dataclasses.dataclass
 class SubRectF:
     """A sized and positioned rectangle in relation to a sized rectangle."""
+
     container: "SizeF"
     rect: "RectF"
 

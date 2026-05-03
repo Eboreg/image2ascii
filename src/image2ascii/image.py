@@ -3,11 +3,10 @@ from os import PathLike
 from pathlib import Path
 from typing import IO, TYPE_CHECKING, Self, cast
 
-import cairosvg
 import numpy as np
 from PIL import Image, ImageEnhance, ImageOps
 
-from image2ascii.color import ANSI_COLOR_DICT, A, B, Color, G, R, Vi, get_perceived_brightness
+from image2ascii.color import ANSI_COLOR_DICT, A, B, G, R, Vi, get_perceived_brightness
 from image2ascii.geometry import Size, SubRect
 from image2ascii.timing import timer
 from image2ascii.types import ImageArray
@@ -16,6 +15,7 @@ from image2ascii.types import ImageArray
 if TYPE_CHECKING:
     from PIL.Image import Resampling
 
+    from image2ascii.color import Color
     from image2ascii.geometry import SizeF
 
 
@@ -42,18 +42,29 @@ class ImagePlus:
     the two ratios to then cancel each other out.
     """
     __image: Image.Image
+    __is_opaque: bool | None = None
     __matrix: ImageArray | None = None
 
     is_matrix_stale: bool = True
-    is_opaque: bool | None = None  # Yes/no/unknown
+    # is_opaque: bool | None = None  # Yes/no/unknown
     pixel_ratio: float = 1
 
     def __init__(self, image: Image.Image, matrix: ImageArray | None = None, is_opaque: bool | None = None):
         self.__image = image
-        self.is_opaque = is_opaque
+        self.__is_opaque = is_opaque
         if matrix is not None:
-            self.__matrix = matrix
-            self.is_matrix_stale = False
+            self.__set_matrix(matrix)
+
+    @property
+    def is_opaque(self) -> bool:
+        if self.__is_opaque is None:
+            matrix = self.get_matrix(regenerate_if_stale=False)
+            self.__is_opaque = bool(np.all(matrix[:, :, Vi]))
+        return self.__is_opaque
+
+    @is_opaque.setter
+    def is_opaque(self, value: bool):
+        self.__is_opaque = value
 
     @property
     def ratio(self) -> float:
@@ -86,16 +97,16 @@ class ImagePlus:
         if box:
             self.__image = self.__image.crop(box.crop_tuple)
             if not self.is_matrix_stale:
-                self.__matrix = self.get_matrix(regenerate_if_stale=False)[box.top:box.bottom, box.left:box.right]
-                self.is_opaque = bool(np.all(self.__matrix[:, :, Vi]))
+                matrix = self.get_matrix(regenerate_if_stale=False)[box.top:box.bottom, box.left:box.right]
+                self.__set_matrix(matrix)
             else:
                 # If it was flagged as opaque, it will remain so after a
                 # crop, so don't touch is_opaque in that case. If, on the other
                 # hand, it was flagged as _not_ opaque, we don't yet know if
                 # that is still the case (all the transparent parts may have
                 # been cropped away).
-                if not self.is_opaque:
-                    self.is_opaque = None
+                if not self.__is_opaque:
+                    self.__is_opaque = None
 
     def enhance(
         self,
@@ -104,6 +115,9 @@ class ImagePlus:
         contrast: float = 1.0,
         sharpness: float = 1.0,
         invert: bool = False,
+        mirror: bool = False,
+        rotate: float = 0.0,
+        resample: "Resampling | None" = None,
     ):
         self.__apply_enhance(ImageEnhance.Brightness, brightness)
         self.__apply_enhance(ImageEnhance.Color, color_balance)
@@ -111,9 +125,19 @@ class ImagePlus:
         self.__apply_enhance(ImageEnhance.Sharpness, sharpness)
         if invert:
             self.invert()
+        if mirror:
+            self.__image = ImageOps.mirror(self.__image)
+            self.is_matrix_stale = True
+        if rotate:
+            if resample:
+                self.__image = self.__image.rotate(rotate, resample=resample)
+            else:
+                self.__image = self.__image.rotate(rotate)
+            self.is_matrix_stale = True
+            self.__is_opaque = None
 
     @timer
-    def fill_transparency(self, fill: Color | None = None):
+    def fill_transparency(self, fill: "Color | None" = None):
         """
         All pixels with alpha < 0xff will be filled with `fill` in reverse
         proportion to how high their alpha value is. This is because pixels
@@ -125,7 +149,7 @@ class ImagePlus:
         original = matrix[:, :, :A] * alpha_fractions
         filled = fill.array[:A] * (1 - alpha_fractions)
         matrix[:, :, :A] = (original + filled).astype(np.uint8)
-        self.__matrix = matrix
+        self.__set_matrix(matrix)
 
     def get_matrix(self, regenerate_if_stale: bool) -> ImageArray:
         if regenerate_if_stale and self.is_matrix_stale:
@@ -153,9 +177,11 @@ class ImagePlus:
         # Fill first 4 values with R, G, B, A
         matrix[:, :, : A + 1] = self.as_nparray()
 
-        self.__matrix = matrix
-        self.is_matrix_stale = False
-        self.is_opaque = True
+        # We consider the image to be opaque if all Vi values are 1, which they
+        # are right now, since we initialized the matrix with np.ones() above.
+        # They will remain this way until we explicitly run
+        # self.update_visibility_by_*().
+        self.__set_matrix(matrix, is_opaque=True)
 
         return matrix
 
@@ -174,7 +200,7 @@ class ImagePlus:
             self.__update_visibility(matrix, matrix[:, :, A] >= min_alpha)
 
     @timer
-    def update_visibility_by_bgdistance(self, background: Color, min_distance: int):
+    def update_visibility_by_bgdistance(self, background: "Color", min_distance: int):
         if min_distance > 0:
             matrix = self.get_matrix(regenerate_if_stale=True)
             colors = matrix.reshape((matrix.shape[0] * matrix.shape[1], 5)).astype(np.int64)
@@ -191,16 +217,23 @@ class ImagePlus:
     @timer
     def __apply_enhance(self, Enhance: EnhanceType, value: float):
         if value != 1.0:
+            self.convert_to_rgba()
             self.__image = Enhance(self.__image).enhance(value)
             self.is_matrix_stale = True
-            self.is_opaque = None
+            self.__is_opaque = None
+
+    def __set_matrix(self, matrix: ImageArray, is_opaque: bool | None = None):
+        self.__matrix = matrix
+        if is_opaque is not None:
+            self.__is_opaque = is_opaque
+        else:
+            self.__is_opaque = bool(np.all(matrix[:, :, Vi]))
+        self.is_matrix_stale = False
 
     @timer
     def __update_visibility(self, matrix: ImageArray, visibility: np.ndarray[tuple[int, int], np.dtype[np.bool]]):
         matrix[:, :, Vi] &= visibility
-        self.is_opaque = bool(np.all(matrix[:, :, Vi]))
-        self.is_matrix_stale = False
-        self.__matrix = matrix
+        self.__set_matrix(matrix)
 
     @classmethod
     @timer
@@ -223,6 +256,14 @@ class ImagePlus:
         output_width: float | None = None,
         output_height: float | None = None,
     ) -> Self:
+        try:
+            import cairosvg
+        except ImportError as e:
+            raise ImportError(
+                "Handling SVG files requires the cairosvg package. Reinstalling image2ascii with the 'svg' extra "
+                "installs it for you."
+            ) from e
+
         output = BytesIO()
         if output_size is not None:
             output_width, output_height = output_size.tuple

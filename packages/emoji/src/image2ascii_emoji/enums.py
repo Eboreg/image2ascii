@@ -1,5 +1,5 @@
 import enum
-from typing import Annotated, Any, Self
+from typing import Annotated
 
 from pydantic import BeforeValidator
 
@@ -8,13 +8,36 @@ class Gender(enum.StrEnum):
     FEMALE = "female"
     MALE = "male"
 
+    def __str__(self) -> str:
+        return self.name.lower().replace("_", "-")
+
     @staticmethod
-    def validate_gender(value: str) -> "Gender | None":
-        value = value.upper()
-        if value in Gender.__members__:
-            return Gender[value]
-        if value in Gender:
-            return Gender(value)
+    def validate(value: str | None) -> "Gender | None":
+        if value is not None:
+            value = value.lower()
+            if value in ("female", "woman", "women", "girl", "girls"):
+                return Gender.FEMALE
+            if value in ("male", "man", "men", "boy", "boys"):
+                return Gender.MALE
+        return None
+
+
+class Hair(enum.StrEnum):
+    RED = "red"
+    CURLY = "curly"
+    WHITE = "white"
+    BALD = "bald"
+    BLOND = "blond"
+
+    def __str__(self) -> str:
+        return self.name.lower().replace("_", "-")
+
+    @staticmethod
+    def validate(value: str | None) -> "Hair | None":
+        if value is not None:
+            value = value.upper()
+            if value in Hair.__members__:
+                return Hair[value]
         return None
 
 
@@ -25,22 +48,20 @@ class SkinTone(enum.StrEnum):
     MEDIUM_DARK = "medium-dark"
     DARK = "dark"
 
-    @classmethod
-    def get(cls, v: Any) -> Self | None:
-        if v in cls:
-            return cls(v)
-        return None
+    def __str__(self) -> str:
+        return self.name.lower().replace("_", "-")
 
     @staticmethod
-    def validate_skin_tone(value: str) -> "SkinTone | None":
-        value = value.upper().replace("-", "_")
-        if value in SkinTone.__members__:
-            return SkinTone[value]
-        if value in SkinTone:
-            return SkinTone(value)
+    def validate(value: str | None) -> "SkinTone | None":
+        if value is not None:
+            value = value.upper().replace("-", "_")
+            if value in SkinTone.__members__:
+                return SkinTone[value]
         return None
 
 
-GenderType = Annotated[Gender, BeforeValidator(Gender.validate_gender)]
+GenderType = Annotated[Gender, BeforeValidator(Gender.validate)]
 
-SkinToneType = Annotated[SkinTone, BeforeValidator(SkinTone.validate_skin_tone)]
+HairType = Annotated[Hair, BeforeValidator(Hair.validate)]
+
+SkinToneType = Annotated[SkinTone, BeforeValidator(SkinTone.validate)]
